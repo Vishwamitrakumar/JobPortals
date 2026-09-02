@@ -51,28 +51,47 @@ const initialFormData: ProfileFormData = {
   noticePeriod: "",
 };
 
+// Human-readable labels used in the "please fill all fields" message
+const FIELD_LABELS: Record<keyof ProfileFormData, string> = {
+  fullName: "Full Name",
+  email: "Email Address",
+  phone: "Phone Number",
+  location: "Location",
+  jobTitle: "Current Job Title",
+  experience: "Experience",
+  about: "About Me",
+  dob: "Date of Birth",
+  gender: "Gender",
+  linkedin: "LinkedIn Profile",
+  portfolio: "Portfolio / Website",
+  github: "GitHub Profile",
+  currentSalary: "Current Salary",
+  expectedSalary: "Expected Salary",
+  noticePeriod: "Notice Period",
+};
+
+// Small helper so every label renders with a consistent red asterisk.
+function RequiredLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor}>
+      {children} <span className="text-red-500">*</span>
+    </Label>
+  );
+}
+
+const API = process.env.NEXT_PUBLIC_API;
+
 export default function MyProfile() {
   const [formData, setFormData] = useState<ProfileFormData>(initialFormData);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  const getStoredUserId = () => {
-    const storedUserId = localStorage.getItem("userId");
-    if (storedUserId) return storedUserId;
-
-    try {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        return parsedUser?.id?.toString() || null;
-      }
-    } catch {
-      return null;
-    }
-
-    return null;
-  };
 
   const updateField = <K extends keyof ProfileFormData>(
     field: K,
@@ -93,8 +112,6 @@ export default function MyProfile() {
     });
   };
 
-  
-
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -109,15 +126,22 @@ export default function MyProfile() {
     setSelectedFile(null);
   };
 
-const API = process.env.NEXT_PUBLIC_API;
+  // Returns the list of empty required fields (human-readable labels).
+  const getEmptyFields = (): string[] => {
+    return (Object.keys(formData) as Array<keyof ProfileFormData>)
+      .filter((key) => !formData[key] || String(formData[key]).trim() === "")
+      .map((key) => FIELD_LABELS[key]);
+  };
 
+  // ---- Fetch the logged-in user's own profile ----
+  // Backend uses IsAuthenticated + request.user, so GET /api/profile/
+  // returns a single profile object (not a list). No client-side
+  // matching by userId is needed or safe.
   useEffect(() => {
-    const fetchProfile = async () => { console.log("useEffect called");
+    const fetchProfile = async () => {
       const token = localStorage.getItem("access");
-      console.log("Token:", token);
-      const userId = getStoredUserId();
 
-      if (!token || !userId) {
+      if (!token) {
         showProfileToast("error", "Error", "Please login to load your profile.");
         return;
       }
@@ -129,26 +153,25 @@ const API = process.env.NEXT_PUBLIC_API;
             Authorization: `Bearer ${token}`,
           },
         });
-       console.log("Fetch Profile Response Status:", response);
-      const responseText = await response.text();
-      console.log("GET Response =", response);
-        let profiles: Array<Record<string, unknown>> = [];
 
-        try {
-          profiles = responseText ? JSON.parse(responseText) : [];
-        } catch {
-          profiles = [];
-        }
-
-        if (!Array.isArray(profiles)) {
+        if (!response.ok) {
+          // e.g. profile not created yet for this user, or auth expired.
+          if (response.status !== 404) {
+            showProfileToast("error", "Error", "Unable to load profile data.");
+          }
           return;
         }
 
-        const currentProfile = profiles.find(
-          (profile: Record<string, unknown>) => Number(profile.user) === Number(userId)
-        ) as Record<string, unknown> | undefined;
+        const responseText = await response.text();
+        let currentProfile: Record<string, unknown> | null = null;
 
-        if (!currentProfile) {
+        try {
+          currentProfile = responseText ? JSON.parse(responseText) : null;
+        } catch {
+          currentProfile = null;
+        }
+
+        if (!currentProfile || typeof currentProfile !== "object") {
           return;
         }
 
@@ -171,7 +194,7 @@ const API = process.env.NEXT_PUBLIC_API;
         });
 
         if (currentProfile.profile_image) {
-          setAvatarUrl(`${API}${currentProfile.profile_image}`);setAvatarUrl(`http://127.0.0.1:8000${currentProfile.profile_image}`);
+          setAvatarUrl(`${API}${currentProfile.profile_image}`);
         }
       } catch (error) {
         console.error(error);
@@ -182,12 +205,24 @@ const API = process.env.NEXT_PUBLIC_API;
     fetchProfile();
   }, []);
 
+  // ---- Save profile ----
   const handleSave = async () => {
     const token = localStorage.getItem("access");
-    const userId = getStoredUserId();
 
-    if (!token || !userId) {
+    if (!token) {
       showProfileToast("error", "Error", "Please login to save your profile.");
+      return;
+    }
+
+    // Validation: every field is required. If anything is empty, stop here
+    // and tell the user, instead of hitting the API.
+    const emptyFields = getEmptyFields();
+    if (emptyFields.length > 0) {
+      showProfileToast(
+        "error",
+        "Missing Information",
+        "Please fill all input fields."
+      );
       return;
     }
 
@@ -196,7 +231,6 @@ const API = process.env.NEXT_PUBLIC_API;
     try {
       const data = new FormData();
 
-      data.append("user", userId);
       data.append("full_name", formData.fullName);
       data.append("email", formData.email);
       data.append("phone", formData.phone);
@@ -217,7 +251,8 @@ const API = process.env.NEXT_PUBLIC_API;
         data.append("profile_image", selectedFile);
       }
 
-      const response = await fetch("http://127.0.0.1:8000/api/profile/", {
+      // Use the same base URL as GET (env var), not a hardcoded host.
+      const response = await fetch(`${API}/api/profile/`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -225,18 +260,20 @@ const API = process.env.NEXT_PUBLIC_API;
         body: data,
       });
 
+      const contentType = response.headers.get("content-type") || "";
       const responseText = await response.text();
       let responseData: Record<string, unknown> = {};
 
-      try {
-        responseData = responseText ? JSON.parse(responseText) : {};
-      } catch {
-        responseData = { detail: responseText || "Failed to save profile" };
+      if (contentType.includes("application/json")) {
+        try {
+          responseData = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          responseData = { detail: "Unexpected server response." };
+        }
+      } else {
+        // Server returned HTML (e.g. Django debug error page) instead of JSON.
+        responseData = { detail: "Server error occurred. Please try again later." };
       }
-
-      console.log("Status:", response.status);
-console.log("Status Text:", response.statusText);
-console.log("Response:", responseData);
 
       if (!response.ok) {
         console.error(responseData);
@@ -252,7 +289,6 @@ console.log("Response:", responseData);
         return;
       }
 
-      console.log(responseData);
       showProfileToast("success", "Success", "Profile saved successfully!");
     } catch (error) {
       console.error(error);
@@ -261,6 +297,7 @@ console.log("Response:", responseData);
       setIsSaving(false);
     }
   };
+
   return (
     <div className="min-h-screen bg-muted/30 p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -313,7 +350,7 @@ console.log("Response:", responseData);
             {/* Fields */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="fullName">Full Name</Label>
+                <RequiredLabel htmlFor="fullName">Full Name</RequiredLabel>
                 <Input
                   id="fullName"
                   value={formData.fullName}
@@ -321,7 +358,7 @@ console.log("Response:", responseData);
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email Address</Label>
+                <RequiredLabel htmlFor="email">Email Address</RequiredLabel>
                 <Input
                   id="email"
                   type="email"
@@ -331,7 +368,7 @@ console.log("Response:", responseData);
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="phone">Phone Number</Label>
+                <RequiredLabel htmlFor="phone">Phone Number</RequiredLabel>
                 <Input
                   id="phone"
                   value={formData.phone}
@@ -339,7 +376,7 @@ console.log("Response:", responseData);
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="location">Location</Label>
+                <RequiredLabel htmlFor="location">Location</RequiredLabel>
                 <Input
                   id="location"
                   value={formData.location}
@@ -348,7 +385,7 @@ console.log("Response:", responseData);
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="jobTitle">Current Job Title</Label>
+                <RequiredLabel htmlFor="jobTitle">Current Job Title</RequiredLabel>
                 <Input
                   id="jobTitle"
                   placeholder="e.g. Software Engineer"
@@ -357,7 +394,7 @@ console.log("Response:", responseData);
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="experience">Experience (Years)</Label>
+                <RequiredLabel htmlFor="experience">Experience (Years)</RequiredLabel>
                 <Select
                   value={formData.experience || ""}
                   onValueChange={(value) => updateField("experience", value ?? "")}
@@ -376,7 +413,7 @@ console.log("Response:", responseData);
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="about">About Me</Label>
+                <RequiredLabel htmlFor="about">About Me</RequiredLabel>
                 <textarea
                   id="about"
                   maxLength={500}
@@ -399,7 +436,7 @@ console.log("Response:", responseData);
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="dob">Date of Birth</Label>
+              <RequiredLabel htmlFor="dob">Date of Birth</RequiredLabel>
               <div className="relative">
                 <Input
                   id="dob"
@@ -413,7 +450,7 @@ console.log("Response:", responseData);
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="gender">Gender</Label>
+              <RequiredLabel htmlFor="gender">Gender</RequiredLabel>
               <Select
                 value={formData.gender || ""}
                 onValueChange={(value) => updateField("gender", value ?? "")}
@@ -430,7 +467,7 @@ console.log("Response:", responseData);
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="linkedin">LinkedIn Profile</Label>
+              <RequiredLabel htmlFor="linkedin">LinkedIn Profile</RequiredLabel>
               <Input
                 id="linkedin"
                 placeholder="https://linkedin.com/in/yourprofile"
@@ -440,7 +477,7 @@ console.log("Response:", responseData);
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="portfolio">Portfolio / Website</Label>
+              <RequiredLabel htmlFor="portfolio">Portfolio / Website</RequiredLabel>
               <Input
                 id="portfolio"
                 placeholder="https://yourwebsite.com"
@@ -450,7 +487,7 @@ console.log("Response:", responseData);
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="github">GitHub Profile</Label>
+              <RequiredLabel htmlFor="github">GitHub Profile</RequiredLabel>
               <Input
                 id="github"
                 placeholder="https://github.com/username"
@@ -460,7 +497,7 @@ console.log("Response:", responseData);
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="currentSalary">Current Salary (Annual)</Label>
+              <RequiredLabel htmlFor="currentSalary">Current Salary (Annual)</RequiredLabel>
               <Input
                 id="currentSalary"
                 type="number"
@@ -471,7 +508,7 @@ console.log("Response:", responseData);
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="expectedSalary">Expected Salary (Annual)</Label>
+              <RequiredLabel htmlFor="expectedSalary">Expected Salary (Annual)</RequiredLabel>
               <Input
                 id="expectedSalary"
                 type="number"
@@ -482,7 +519,7 @@ console.log("Response:", responseData);
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="noticePeriod">Notice Period</Label>
+              <RequiredLabel htmlFor="noticePeriod">Notice Period</RequiredLabel>
               <Select
                 value={formData.noticePeriod || ""}
                 onValueChange={(value) => updateField("noticePeriod", value ?? "")}

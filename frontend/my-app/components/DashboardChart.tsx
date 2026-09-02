@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -19,6 +20,11 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API || "";
 const LIST_URL = `${API_BASE}/api/my-applications/`;
+
+// Backend max_page_size is 100 (see MyApplicationsPagination), so we
+// request the largest batch allowed and walk the "next" links to build
+// the full history the overview/chart needs.
+const FETCH_PAGE_SIZE = 100;
 
 // ==================================================
 // TYPES
@@ -37,6 +43,34 @@ interface ChartData {
   applications: number;
 }
 
+interface ApplicationsPageResponse {
+  success: boolean;
+  count: number;
+  next: string | null;
+  previous: string | null;
+  applications: Application[];
+}
+
+// ==================================================
+// FILTER OPTIONS
+// ==================================================
+
+type FilterValue = "thisMonth" | "previousMonth" | "thisYear" | "all";
+
+const FILTER_OPTIONS: { value: FilterValue; label: string }[] = [
+  { value: "thisMonth", label: "This Month" },
+  { value: "previousMonth", label: "Previous Month" },
+  { value: "thisYear", label: "This Year" },
+  { value: "all", label: "All Time" },
+];
+
+const FILTER_SUFFIX: Record<FilterValue, string> = {
+  thisMonth: "this month",
+  previousMonth: "last month",
+  thisYear: "this year",
+  all: "overall",
+};
+
 // ==================================================
 // COMPONENT
 // ==================================================
@@ -50,12 +84,22 @@ const ApplicationOverview = () => {
 
   const [error, setError] = useState<string | null>(null);
 
+  // --------------------------------------------------
+  // FILTER STATE
+  // --------------------------------------------------
+
+  const [filter, setFilter] = useState<FilterValue>("thisMonth");
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // ==================================================
-  // FETCH APPLICATIONS
+  // FETCH APPLICATIONS (walks every paginated page)
   // ==================================================
 
   const fetchApplications = useCallback(
-    async (signal: AbortSignal) => {
+    async (activeFilter: FilterValue, signal: AbortSignal) => {
       setLoading(true);
       setError(null);
 
@@ -76,60 +120,69 @@ const ApplicationOverview = () => {
         }
 
         // --------------------------------------------
-        // API REQUEST
+        // WALK ALL PAGES
+        //
+        // Backend now applies the date-range filter itself via
+        // ?range=, so this only loops if a filtered result set still
+        // spans more than FETCH_PAGE_SIZE records.
         // --------------------------------------------
 
-        const res = await fetch(LIST_URL, {
-          method: "GET",
+        let nextUrl: string | null = `${LIST_URL}?page_size=${FETCH_PAGE_SIZE}&range=${activeFilter}`;
 
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+        let allApplications: Application[] = [];
 
-          signal,
-        });
+        while (nextUrl) {
+          const res: Response = await fetch(nextUrl, {
+            method: "GET",
 
-        // --------------------------------------------
-        // 401 ERROR
-        // --------------------------------------------
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
 
-        if (res.status === 401) {
-          throw new Error(
-            "Your session has expired. Please log in again."
-          );
-        }
+            signal,
+          });
 
-        // --------------------------------------------
-        // OTHER ERROR
-        // --------------------------------------------
+          // ------------------------------------------
+          // 401 ERROR
+          // ------------------------------------------
 
-        if (!res.ok) {
-          throw new Error(
-            `Request failed with status ${res.status}`
-          );
-        }
-
-        // --------------------------------------------
-        // RESPONSE
-        // --------------------------------------------
-
-        const data = await res.json();
-
-        /*
-          Expected backend response:
-
-          {
-            success: true,
-            applications: [...]
+          if (res.status === 401) {
+            throw new Error(
+              "Your session has expired. Please log in again."
+            );
           }
-        */
 
-        setApplications(
-          Array.isArray(data.applications)
+          // ------------------------------------------
+          // OTHER ERROR
+          // ------------------------------------------
+
+          if (!res.ok) {
+            throw new Error(
+              `Request failed with status ${res.status}`
+            );
+          }
+
+          // ------------------------------------------
+          // RESPONSE
+          // ------------------------------------------
+
+          const data: ApplicationsPageResponse = await res.json();
+
+          const pageApplications = Array.isArray(
+            data.applications
+          )
             ? data.applications
-            : []
-        );
+            : [];
+
+          allApplications = allApplications.concat(
+            pageApplications
+          );
+
+          nextUrl = data.next || null;
+        }
+
+        setApplications(allApplications);
       } catch (err: any) {
         // Ignore abort errors
         if (err?.name !== "AbortError") {
@@ -152,44 +205,47 @@ const ApplicationOverview = () => {
   useEffect(() => {
     const controller = new AbortController();
 
-    fetchApplications(controller.signal);
+    fetchApplications(filter, controller.signal);
 
     return () => {
       controller.abort();
     };
-  }, [fetchApplications]);
+  }, [fetchApplications, filter]);
 
   // ==================================================
-  // CURRENT MONTH APPLICATIONS
+  // CLOSE DROPDOWN ON OUTSIDE CLICK
   // ==================================================
 
-  const thisMonthApplications = useMemo(() => {
-    const now = new Date();
-
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    return applications.filter((application) => {
-      const rawDate =
-        application.created_at ||
-        application.createdAt;
-
-      if (!rawDate) {
-        return false;
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false);
       }
+    }
 
-      const createdDate = new Date(rawDate);
+    document.addEventListener("mousedown", handleClickOutside);
 
-      if (isNaN(createdDate.getTime())) {
-        return false;
-      }
-
-      return (
-        createdDate.getMonth() === currentMonth &&
-        createdDate.getFullYear() === currentYear
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
       );
-    });
-  }, [applications]);
+    };
+  }, []);
+
+  // ==================================================
+  // FILTERED APPLICATIONS
+  //
+  // Backend already applies the date-range filter via ?range=,
+  // so `applications` coming back is scoped to the active filter.
+  // Kept as its own variable so the rest of the derived state below
+  // doesn't need to change names.
+  // ==================================================
+
+  const filteredApplications = applications;
 
   // ==================================================
   // STATUS COUNTS
@@ -204,7 +260,7 @@ const ApplicationOverview = () => {
       Rejected: 0,
     };
 
-    thisMonthApplications.forEach((application) => {
+    filteredApplications.forEach((application) => {
       const status = application.status
         ?.trim()
         .toLowerCase();
@@ -236,14 +292,13 @@ const ApplicationOverview = () => {
     });
 
     return counts;
-  }, [thisMonthApplications]);
+  }, [filteredApplications]);
 
   // ==================================================
   // TOTAL APPLICATIONS
   // ==================================================
 
-  const totalApplications =
-    thisMonthApplications.length;
+  const totalApplications = filteredApplications.length;
 
   // ==================================================
   // CHART DATA
@@ -252,10 +307,9 @@ const ApplicationOverview = () => {
   const chartData = useMemo<ChartData[]>(() => {
     const grouped: Record<string, number> = {};
 
-    thisMonthApplications.forEach((application) => {
+    filteredApplications.forEach((application) => {
       const rawDate =
-        application.created_at ||
-        application.createdAt;
+        application.created_at || application.createdAt;
 
       if (!rawDate) {
         return;
@@ -312,18 +366,36 @@ const ApplicationOverview = () => {
         return {
           date,
 
+          // "This Year" / "All Time" can span many months, so include
+          // the year in the label to avoid ambiguous dates repeating.
           label: dateObj.toLocaleDateString(
             "en-US",
-            {
-              month: "short",
-              day: "numeric",
-            }
+            filter === "thisYear" || filter === "all"
+              ? {
+                  month: "short",
+                  day: "numeric",
+                  year: "2-digit",
+                }
+              : {
+                  month: "short",
+                  day: "numeric",
+                }
           ),
 
           applications: count,
         };
       });
-  }, [thisMonthApplications]);
+  }, [filteredApplications, filter]);
+
+  // ==================================================
+  // FILTER LABEL HELPERS
+  // ==================================================
+
+  const activeFilterLabel =
+    FILTER_OPTIONS.find((option) => option.value === filter)
+      ?.label || "This Month";
+
+  const filterSuffix = FILTER_SUFFIX[filter];
 
   // ==================================================
   // LOADING UI
@@ -409,33 +481,70 @@ const ApplicationOverview = () => {
             {totalApplications === 1
               ? "application"
               : "applications"}{" "}
-            this month
+            {filterSuffix}
           </p>
         </div>
 
-        {/* Month Dropdown */}
+        {/* Filter Dropdown */}
 
-        <button
-          type="button"
-          className="flex w-fit items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-blue-200 hover:bg-slate-50 hover:shadow"
-        >
-          <span>This Month</span>
-
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4 text-slate-500"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+        <div className="relative w-fit" ref={dropdownRef}>
+          <button
+            type="button"
+            onClick={() =>
+              setIsDropdownOpen((previous) => !previous)
+            }
+            aria-haspopup="listbox"
+            aria-expanded={isDropdownOpen}
+            className="flex w-fit items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-blue-200 hover:bg-slate-50 hover:shadow"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m19 9-7 7-7-7"
-            />
-          </svg>
-        </button>
+            <span>{activeFilterLabel}</span>
+
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${
+                isDropdownOpen ? "rotate-180" : ""
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m19 9-7 7-7-7"
+              />
+            </svg>
+          </button>
+
+          {isDropdownOpen && (
+            <ul
+              role="listbox"
+              className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+            >
+              {FILTER_OPTIONS.map((option) => (
+                <li key={option.value}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={filter === option.value}
+                    onClick={() => {
+                      setFilter(option.value);
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`flex w-full items-center px-4 py-2.5 text-left text-sm transition-colors duration-150 ${
+                      filter === option.value
+                        ? "bg-blue-50 font-medium text-blue-600"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* ==================================================
@@ -476,7 +585,7 @@ const ApplicationOverview = () => {
             </div>
 
             <p className="text-sm font-semibold text-slate-700">
-              No applications found this month
+              No applications found {filterSuffix}
             </p>
 
             <p className="mt-1 text-xs text-slate-400">

@@ -104,8 +104,30 @@ class JobDetailAPIView(RetrieveAPIView):
     permission_classes = [AllowAny]
 
 class ApplyFormAPIView(APIView):
-    permission_classes = [AllowAny]
+
     parser_classes = (MultiPartParser, FormParser)
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get(self, request):
+
+        queryset = ApplyForm.objects.filter(
+            job__posted_by=request.user
+        ).order_by("-created_at")
+
+        serializer = ApplyFormListSerializer(
+            queryset,
+            many=True,
+            context={"request": request}
+        )
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK
+        )
 
     def post(self, request):
 
@@ -125,17 +147,18 @@ class ApplyFormAPIView(APIView):
             # 4. Send notification to recruiter
             if recruiter:
                 Notification.objects.create(
-    recipient=recruiter,
-    notification_type="APPLICATION_SUBMITTED",
-    title="New Application Received",
-    message=(
-        f"{application.full_name} applied for "
-        f"{job.job_title}."
-    ),
-    application=application,   # IMPORTANT
-    job=job,
-    is_read=False
-)
+                    recipient=recruiter,
+                    notification_type="APPLICATION_SUBMITTED",
+                    title="New Application Received",
+                    message=(
+                        f"{application.full_name} applied for "
+                        f"{job.job_title}."
+                    ),
+                    application=application,
+                    job=job,
+                    is_read=False
+                )
+
             return Response(
                 {
                     "success": True,
@@ -150,61 +173,51 @@ class ApplyFormAPIView(APIView):
         )
 
 class ProfileAPIView(APIView):
-
+ 
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
-
+ 
     def get(self, request):
-        profile = Profile.objects.get(user=request.user)
+        # get_or_create instead of get() -> avoids DoesNotExist -> 500
+        # for users who have never saved a profile yet.
+        profile, _ = Profile.objects.get_or_create(user=request.user)
         serializer = ProfileSerializer(profile)
-        return Response(serializer.data)
-
+        return Response(serializer.data, status=status.HTTP_200_OK)
+ 
     def post(self, request):
         profile, created = Profile.objects.get_or_create(user=request.user)
-
+ 
         serializer = ProfileSerializer(
             profile,
             data=request.data,
             partial=True
         )
-
+ 
         if serializer.is_valid():
             serializer.save(user=request.user)
-
+ 
             if created:
-                return Response(
-                    serializer.data,
-                    status=status.HTTP_201_CREATED
-                )
-
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK
-            )
-
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+ 
+            return Response(serializer.data, status=status.HTTP_200_OK)
+ 
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+ 
     def put(self, request):
-        profile = Profile.objects.get(user=request.user)
-
+       
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+ 
         serializer = ProfileSerializer(
             profile,
             data=request.data,
             partial=True
         )
-
+ 
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+ 
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class LogoutAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
@@ -286,7 +299,7 @@ class ApplyFormListAPIView(APIView):
 
 class ApplicationStatusUpdateAPIView(APIView):
     permission_classes = [IsAuthenticated]
-   
+
     def patch(self, request, pk):
         try:
             application = ApplyForm.objects.get(pk=pk)
@@ -296,11 +309,50 @@ class ApplicationStatusUpdateAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        application.status = request.data.get("status", application.status)
-        application.notes = request.data.get("notes", application.notes)
+        new_status = request.data.get(
+            "status",
+            application.status
+        )
+
+        application.status = new_status
+
+        # Notes
+        application.notes = request.data.get(
+            "notes",
+            application.notes
+        )
+
+        # Interview Date & Time
+        if new_status.lower() == "interview":
+
+            interview_date = request.data.get("interview_date")
+            interview_time = request.data.get("interview_time")
+
+            if not interview_date or not interview_time:
+                return Response(
+                    {
+                        "success": False,
+                        "message": "Interview date and time are required."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            application.interview_date = interview_date
+            application.interview_time = interview_time
+
+        else:
+            application.interview_date = None
+            application.interview_time = None
+
         application.save()
 
         return Response({
             "success": True,
-            "message": "Application updated successfully"
+            "message": "Application updated successfully",
+            "data": {
+                "status": application.status,
+                "notes": application.notes,
+                "interview_date": application.interview_date,
+                "interview_time": application.interview_time
+            }
         })

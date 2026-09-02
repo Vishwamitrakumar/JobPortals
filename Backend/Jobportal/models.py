@@ -99,6 +99,16 @@ class ApplyForm(models.Model):
         choices=STATUS_CHOICES,
         default="Pending"
     )
+    interview_date = models.DateField(
+    null=True,
+    blank=True
+    )
+
+    interview_time = models.TimeField(
+    null=True,
+    blank=True
+    )
+
     notes = models.TextField(
         blank=True,
         null=True
