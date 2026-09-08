@@ -12,14 +12,13 @@ import {
   ClipboardCheck,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
   Check,
   Loader2,
   AlertCircle,
 } from "lucide-react";
 
-
-
-const API_BASE = process.env.NEXT_PUBLIC_API
+const API_BASE = process.env.NEXT_PUBLIC_API;
 const LIST_URL = `${API_BASE}/api/my-applications/`;
 
 const STATUS_OPTIONS = ["All Status", "Pending", "Shortlisted", "Rejected", "Selected"];
@@ -52,8 +51,6 @@ function formatDate(dateStr) {
   })}`;
 }
 
-
-
 export default function MyApplication() {
   return (
     <div className="min-h-screen w-full p-4 sm:p-8 lg:p-12">
@@ -64,7 +61,6 @@ export default function MyApplication() {
     </div>
   );
 }
-
 
 function JobSearchHero() {
   return (
@@ -153,7 +149,8 @@ function PersonIllustration() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Right side: My Applications panel — now backed by the real API     */
+/*  Right side: My Applications panel — server-side paginated,         */
+/*  searched, and status-filtered via the Django API                   */
 /* ------------------------------------------------------------------ */
 
 function MyApplicationsPanel() {
@@ -166,6 +163,10 @@ function MyApplicationsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [page, setPage] = useState(1);
+  const [pageInfo, setPageInfo] = useState({ count: 0, next: null, previous: null });
+  const pageSize = 5;
+
   // close status dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e) {
@@ -177,10 +178,10 @@ function MyApplicationsPanel() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // MyApplicationsAPIView requires a logged-in user (IsAuthenticated) and
-  // has no query-param filtering — it always returns only *this* user's
-  // applications. So we fetch once, then filter search/status client-side.
-  const fetchApplications = useCallback(async (signal) => {
+  // MyApplicationsAPIView now supports server-side pagination, status
+  // filtering (?status=) and search (?search=) on top of always scoping
+  // results to the logged-in user.
+  const fetchApplications = useCallback(async (signal, pageNum, status, search) => {
     setLoading(true);
     setError(null);
     try {
@@ -191,7 +192,13 @@ function MyApplicationsPanel() {
         throw new Error("You're not logged in. Please log in to view your applications.");
       }
 
-      const res = await fetch(LIST_URL, {
+      const params = new URLSearchParams();
+      params.set("page", pageNum);
+      params.set("page_size", pageSize);
+      if (status && status !== "All Status") params.set("status", status);
+      if (search) params.set("search", search);
+
+      const res = await fetch(`${LIST_URL}?${params.toString()}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -199,7 +206,7 @@ function MyApplicationsPanel() {
         },
         signal,
       });
-      console.log("fetchApplications response:", res);
+
       if (res.status === 401) {
         throw new Error("Your session has expired. Please log in again.");
       }
@@ -209,39 +216,53 @@ function MyApplicationsPanel() {
       }
 
       const data = await res.json();
-      // backend returns { success: true, applications: [...] }
+      // backend returns { success, count, next, previous, applications: [...] }
       setApplications(Array.isArray(data.applications) ? data.applications : []);
+      setPageInfo({
+        count: data.count ?? 0,
+        next: data.next ?? null,
+        previous: data.previous ?? null,
+      });
     } catch (err) {
       if (err.name !== "AbortError") {
         setError(err.message || "Something went wrong while loading applications.");
+        setApplications([]);
+        setPageInfo({ count: 0, next: null, previous: null });
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // fetch once on mount — this endpoint has no server-side search/status filters
+  // When search or status changes: debounce, reset to page 1, refetch.
   useEffect(() => {
     const controller = new AbortController();
-    fetchApplications(controller.signal);
+    const timer = setTimeout(() => {
+      setPage(1);
+      fetchApplications(controller.signal, 1, statusFilter, query);
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, query]);
+
+  // When page changes (and only page), refetch without resetting filters.
+  const isFirstRun = useRef(true);
+  useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
+    const controller = new AbortController();
+    fetchApplications(controller.signal, page, statusFilter, query);
     return () => controller.abort();
-  }, [fetchApplications]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
-  // client-side filtering, since the API always returns the full list
-  const visibleApplications = applications.filter((app) => {
-    const matchesStatus =
-      statusFilter === "All Status" ||
-      (app.status || "").toLowerCase() === statusFilter.toLowerCase();
-
-    const q = query.trim().toLowerCase();
-    const matchesQuery =
-      !q ||
-      app.full_name?.toLowerCase().includes(q) ||
-      app.email?.toLowerCase().includes(q) ||
-      app.current_company?.toLowerCase().includes(q);
-
-    return matchesStatus && matchesQuery;
-  });
+  const totalPages = Math.max(1, Math.ceil(pageInfo.count / pageSize));
 
   return (
     <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -284,7 +305,7 @@ function MyApplicationsPanel() {
         </div>
       </div>
 
-      {/* Search box — same API, filters by name / email / company */}
+      {/* Search box — hits the backend `search` param */}
       <div className="relative mb-4">
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
@@ -314,44 +335,75 @@ function MyApplicationsPanel() {
 
       {/* List */}
       {!loading && !error && (
-        <div className="flex flex-col gap-2">
-          {visibleApplications.map((app) => (
-            <div
-              key={app.id}
-              className="group flex cursor-pointer items-center gap-3 rounded-xl border border-transparent p-3 transition-colors hover:border-slate-200 hover:bg-slate-50 sm:gap-4 sm:p-4"
-            >
-              {/* Avatar */}
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-[#2F6FE0] sm:h-12 sm:w-12">
-                {getInitial(app.full_name)}
-              </div>
+        <>
+          <div className="flex flex-col gap-2">
+            {applications.map((app) => (
+              <div
+                key={app.id}
+                className="group flex cursor-pointer items-center gap-3 rounded-xl border border-transparent p-3 transition-colors hover:border-slate-200 hover:bg-slate-50 sm:gap-4 sm:p-4"
+              >
+                {/* Avatar */}
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-[#2F6FE0] sm:h-12 sm:w-12">
+                  {getInitial(app.full_name)}
+                </div>
 
-              {/* Info */}
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-slate-900">{app.full_name}</p>
-                <p className="truncate text-sm text-slate-500">
-                  {app.current_company || app.email}
-                </p>
-                <p className="truncate text-xs text-slate-400">{formatDate(app.created_at)}</p>
-              </div>
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-slate-900">{app.full_name}</p>
+                  <p className="truncate text-sm text-slate-500">
+                    {app.current_company || app.email}
+                  </p>
+                  <p className="truncate text-xs text-slate-400">{formatDate(app.created_at)}</p>
+                </div>
 
-              {/* Status + chevron */}
-              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <span
-                  className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusStyle(app.status)}`}
-                >
-                  {app.status}
-                </span>
-                <ChevronRight className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
+                {/* Status + chevron */}
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                  <span
+                    className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusStyle(app.status)}`}
+                  >
+                    {app.status}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
+                </div>
               </div>
+            ))}
+
+            {applications.length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-400">
+                No applications found{query ? ` for "${query}"` : ""}.
+              </p>
+            )}
+          </div>
+
+          {/* Pagination controls */}
+          {pageInfo.count > 0 && (
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-sm">
+              <button
+                type="button"
+                disabled={!pageInfo.previous}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+
+              <span className="text-slate-400">
+                Page {page} of {totalPages} · {pageInfo.count} total
+              </span>
+
+              <button
+                type="button"
+                disabled={!pageInfo.next}
+                onClick={() => setPage((p) => p + 1)}
+                className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
-          ))}
-
-          {visibleApplications.length === 0 && (
-            <p className="py-8 text-center text-sm text-slate-400">
-              No applications found{query ? ` for "${query}"` : ""}.
-            </p>
           )}
-        </div>
+        </>
       )}
     </div>
   );

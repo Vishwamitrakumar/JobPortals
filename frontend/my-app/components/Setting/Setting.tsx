@@ -14,8 +14,6 @@ import {
   Eye,
   EyeOff,
   Briefcase,
-  CheckCircle2,
-  XCircle,
   Loader2,
 } from "lucide-react";
 
@@ -24,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Toaster, toast } from "@/components/ui/toast";
 
 import {
   Select,
@@ -54,22 +53,53 @@ type MessageType = "success" | "error" | "";
 interface Profile {
   full_name: string;
   email: string;
-  phone_number: string;
+  phone: string;
   location: string;
-  current_job_title: string;
-  experience_years: string;
-  about_me: string;
-
-  date_of_birth: string;
+  job_title: string;
+  experience: string;
+  about: string;
+  dob: string;
   gender: string;
-
-  linkedin_profile: string;
-  portfolio_website: string;
-  github_profile: string;
-
+  linkedin: string;
+  portfolio: string;
+  github: string;
   current_salary: string;
   expected_salary: string;
   notice_period: string;
+  profile_image?: string;
+}
+
+const FIELD_LABELS: Record<keyof Profile, string> = {
+  full_name: "Full Name",
+  email: "Email Address",
+  phone: "Phone Number",
+  location: "Location",
+  job_title: "Current Job Title",
+  experience: "Experience",
+  about: "About Me",
+  dob: "Date of Birth",
+  gender: "Gender",
+  linkedin: "LinkedIn Profile",
+  portfolio: "Portfolio / Website",
+  github: "GitHub Profile",
+  current_salary: "Current Salary",
+  expected_salary: "Expected Salary",
+  notice_period: "Notice Period",
+  profile_image: "Profile Photo",
+};
+
+function RequiredLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor}>
+      {children} <span className="text-red-500">*</span>
+    </Label>
+  );
 }
 
 interface Settings {
@@ -98,22 +128,20 @@ export default function Setting() {
   const [profile, setProfile] = React.useState<Profile>({
     full_name: "",
     email: "",
-    phone_number: "",
+    phone: "",
     location: "",
-    current_job_title: "",
-    experience_years: "",
-    about_me: "",
-
-    date_of_birth: "",
+    job_title: "",
+    experience: "",
+    about: "",
+    dob: "",
     gender: "",
-
-    linkedin_profile: "",
-    portfolio_website: "",
-    github_profile: "",
-
+    linkedin: "",
+    portfolio: "",
+    github: "",
     current_salary: "",
     expected_salary: "",
     notice_period: "",
+    profile_image: "",
   });
 
   // ----------------------------------------------------
@@ -188,20 +216,7 @@ export default function Setting() {
   const [deleteDialogOpen, setDeleteDialogOpen] =
     React.useState(false);
 
-  // ----------------------------------------------------
-  // MESSAGE
-  // ----------------------------------------------------
 
-  const [message, setMessage] =
-    React.useState("");
-
-  const [messageType, setMessageType] =
-    React.useState<MessageType>("");
-
-
-  // ======================================================
-  // TOKEN
-  // ======================================================
 
   const getToken = () => {
     if (typeof window === "undefined") {
@@ -215,24 +230,32 @@ export default function Setting() {
     );
   };
 
+  const API = process.env.NEXT_PUBLIC_API;
 
-  // ======================================================
-  // MESSAGE
-  // ======================================================
 
-  const showMessage = (
-    text: string,
-    type: "success" | "error"
-  ) => {
-    setMessage(text);
-    setMessageType(type);
-
-    window.setTimeout(() => {
-      setMessage("");
-      setMessageType("");
-    }, 3500);
+  // Same required-field validation logic used by MyProfile.
+  const getEmptyFields = (): string[] => {
+    return (Object.keys(profile) as Array<keyof Profile>)
+      .filter((key) => key !== "profile_image")
+      .filter(
+        (key) =>
+          !profile[key] ||
+          String(profile[key]).trim() === ""
+      )
+      .map((key) => FIELD_LABELS[key]);
   };
 
+  const showMessage = (
+    type: "success" | "error",
+    title: string,
+    message: string
+  ) => {
+    toast.add({
+      type,
+      title,
+      description: message,
+    });
+  };
 
   // ======================================================
   // UPDATE PROFILE STATE
@@ -264,12 +287,11 @@ export default function Setting() {
         }
 
         const response = await fetch(
-          "http://127.0.0.1:8000/api/profile/",
+          `${API}/api/profile/`,
           {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
             },
           }
         );
@@ -278,85 +300,80 @@ export default function Setting() {
           throw new Error("Unable to load profile");
         }
 
-        const data = await response.json();
+        const responseText = await response.text();
+
+        let parsed: any = null;
+
+        try {
+          parsed = responseText
+            ? JSON.parse(responseText)
+            : null;
+        } catch {
+          throw new Error("Invalid server response");
+        }
+
+        // Backend response:
+        // {
+        //   profile: {...},
+        //   profile_strength: {...}
+        // }
+        const data = parsed?.profile ?? parsed;
+
+        if (!data) {
+          return;
+        }
+
+        // =========================
+        // DATABASE PROFILE DATA
+        // =========================
 
         setProfile({
-          full_name:
-            data.full_name ??
-            data.name ??
-            "",
+          full_name: String(data.full_name || ""),
+          email: String(data.email || ""),
+          phone: String(data.phone || ""),
+          location: String(data.location || ""),
 
-          email:
-            data.email ??
-            "",
+          job_title: String(data.job_title || ""),
+          experience: String(data.experience || ""),
+          about: String(data.about || ""),
 
-          phone_number:
-            data.phone_number ??
-            data.phone ??
-            "",
+          dob: String(data.dob || ""),
+          gender: String(data.gender || ""),
 
-          location:
-            data.location ??
-            "",
+          linkedin: String(data.linkedin || ""),
+          portfolio: String(data.portfolio || ""),
+          github: String(data.github || ""),
 
-          current_job_title:
-            data.current_job_title ??
-            "",
+          current_salary: String(data.current_salary || ""),
+          expected_salary: String(data.expected_salary || ""),
+          notice_period: String(data.notice_period || ""),
 
-          experience_years:
-            data.experience_years != null
-              ? String(data.experience_years)
-              : "",
-
-          about_me:
-            data.about_me ??
-            "",
-
-          date_of_birth:
-            data.date_of_birth ??
-            "",
-
-          gender:
-            data.gender ??
-            "",
-
-          linkedin_profile:
-            data.linkedin_profile ??
-            "",
-
-          portfolio_website:
-            data.portfolio_website ??
-            "",
-
-          github_profile:
-            data.github_profile ??
-            "",
-
-          current_salary:
-            data.current_salary != null
-              ? String(data.current_salary)
-              : "",
-
-          expected_salary:
-            data.expected_salary != null
-              ? String(data.expected_salary)
-              : "",
-
-          notice_period:
-            data.notice_period ??
-            "",
+          profile_image: String(data.profile_image || ""),
         });
 
-        if (data.profile_photo) {
-          setPhotoPreview(data.profile_photo);
+        // =========================
+        // PROFILE IMAGE
+        // =========================
+
+        if (data.profile_image) {
+          const imageUrl = String(data.profile_image);
+
+          setPhotoPreview(
+            imageUrl.startsWith("http")
+              ? imageUrl
+              : `${API}${imageUrl}`
+          );
+        } else {
+          setPhotoPreview("");
         }
 
       } catch (error) {
-        console.error(error);
+        console.error("Profile GET Error:", error);
 
         showMessage(
-          "Failed to load profile.",
-          "error"
+          "error",
+          "Error",
+          "Failed to load profile."
         );
       } finally {
         setPageLoading(false);
@@ -388,8 +405,9 @@ export default function Setting() {
 
     if (!allowedTypes.includes(file.type)) {
       showMessage(
-        "Please select JPG, PNG or GIF image.",
-        "error"
+        "error",
+        "Error",
+        "Please select JPG, PNG or GIF image."
       );
 
       return;
@@ -397,8 +415,9 @@ export default function Setting() {
 
     if (file.size > 2 * 1024 * 1024) {
       showMessage(
-        "Profile image must be less than 2MB.",
-        "error"
+        "error",
+        "Error",
+        "Profile image must be less than 2MB."
       );
 
       return;
@@ -424,94 +443,50 @@ export default function Setting() {
 
       if (!token) {
         showMessage(
-          "Please login first.",
-          "error"
+          "error",
+          "Error",
+          "Please login first."
         );
 
         return;
       }
 
-      const formData = new FormData();
+      // Same validation behavior as MyProfile:
+      // do not call the API until every profile field is filled.
+      const emptyFields = getEmptyFields();
 
-      formData.append(
-        "full_name",
-        profile.full_name
-      );
-
-      formData.append(
-        "phone_number",
-        profile.phone_number
-      );
-
-      formData.append(
-        "location",
-        profile.location
-      );
-
-      formData.append(
-        "current_job_title",
-        profile.current_job_title
-      );
-
-      formData.append(
-        "experience_years",
-        profile.experience_years
-      );
-
-      formData.append(
-        "about_me",
-        profile.about_me
-      );
-
-      formData.append(
-        "date_of_birth",
-        profile.date_of_birth
-      );
-
-      formData.append(
-        "gender",
-        profile.gender
-      );
-
-      formData.append(
-        "linkedin_profile",
-        profile.linkedin_profile
-      );
-
-      formData.append(
-        "portfolio_website",
-        profile.portfolio_website
-      );
-
-      formData.append(
-        "github_profile",
-        profile.github_profile
-      );
-
-      formData.append(
-        "current_salary",
-        profile.current_salary
-      );
-
-      formData.append(
-        "expected_salary",
-        profile.expected_salary
-      );
-
-      formData.append(
-        "notice_period",
-        profile.notice_period
-      );
-
-      if (profilePhoto) {
-        formData.append(
-          "profile_photo",
-          profilePhoto
+      if (emptyFields.length > 0) {
+        showMessage(
+          "error",
+          "Error",
+          "Please fill all input fields."
         );
+        return;
       }
 
+      const formData = new FormData();
+
+      formData.append("full_name", profile.full_name);
+      formData.append("email", profile.email);
+      formData.append("phone", profile.phone);
+      formData.append("location", profile.location);
+      formData.append("job_title", profile.job_title);
+      formData.append("experience", profile.experience);
+      formData.append("about", profile.about);
+      formData.append("dob", profile.dob);
+      formData.append("gender", profile.gender);
+      formData.append("linkedin", profile.linkedin);
+      formData.append("portfolio", profile.portfolio);
+      formData.append("github", profile.github);
+      formData.append("current_salary", profile.current_salary);
+      formData.append("expected_salary", profile.expected_salary);
+      formData.append("notice_period", profile.notice_period);
+
+      if (profilePhoto) {
+        formData.append("profile_image", profilePhoto);
+      }
       const response = await fetch(
-        "http://127.0.0.1:8000/api/profile/",
+        `${API}/api/profile/`,
         {
           method: "PUT",
           headers: {
@@ -532,18 +507,20 @@ export default function Setting() {
       }
 
       showMessage(
-        "Profile updated successfully.",
-        "success"
+        "success",
+        "Success",
+        "Profile updated successfully."
       );
 
     } catch (error) {
       console.error(error);
 
       showMessage(
+        "error",
+        "Error",
         error instanceof Error
           ? error.message
-          : "Failed to update profile.",
-        "error"
+          : "Failed to update profile."
       );
     } finally {
       setProfileLoading(false);
@@ -558,8 +535,9 @@ export default function Setting() {
   const handleChangePassword = async () => {
     if (!currentPassword) {
       showMessage(
-        "Enter your current password.",
-        "error"
+        "error",
+        "Error",
+        "Enter your current password."
       );
 
       return;
@@ -567,8 +545,9 @@ export default function Setting() {
 
     if (!newPassword) {
       showMessage(
-        "Enter a new password.",
-        "error"
+        "error",
+        "Error",
+        "Enter a new password."
       );
 
       return;
@@ -576,8 +555,9 @@ export default function Setting() {
 
     if (newPassword.length < 8) {
       showMessage(
-        "New password must contain at least 8 characters.",
-        "error"
+        "error",
+        "Error",
+        "New password must contain at least 8 characters."
       );
 
       return;
@@ -585,8 +565,9 @@ export default function Setting() {
 
     if (newPassword !== confirmPassword) {
       showMessage(
-        "New passwords do not match.",
-        "error"
+        "error",
+        "Error",
+        "New passwords do not match."
       );
 
       return;
@@ -598,7 +579,7 @@ export default function Setting() {
       const token = getToken();
 
       const response = await fetch(
-        "http://127.0.0.1:8000/api/change-password/",
+        `${API}/api/change-password/`,
         {
           method: "POST",
           headers: {
@@ -612,7 +593,6 @@ export default function Setting() {
           }),
         }
       );
-
       const data = await response.json();
 
       if (!response.ok) {
@@ -628,18 +608,20 @@ export default function Setting() {
       setConfirmPassword("");
 
       showMessage(
-        "Password updated successfully.",
-        "success"
+        "success",
+        "Success",
+        "Password updated successfully."
       );
 
     } catch (error) {
       console.error(error);
 
       showMessage(
+        "error",
+        "Error",
         error instanceof Error
           ? error.message
-          : "Failed to change password.",
-        "error"
+          : "Failed to change password."
       );
     } finally {
       setPasswordLoading(false);
@@ -659,23 +641,21 @@ export default function Setting() {
 
       if (!token) {
         showMessage(
-          "Please login first.",
-          "error"
+          "error",
+          "Error",
+          "Please login first."
         );
 
         return;
       }
 
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/account/delete/",
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await fetch(`${API}/api/delete-account/`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       const data =
         response.status !== 204
@@ -701,10 +681,11 @@ export default function Setting() {
       console.error(error);
 
       showMessage(
+        "error",
+        "Error",
         error instanceof Error
           ? error.message
-          : "Failed to delete account.",
-        "error"
+          : "Failed to delete account."
       );
 
       setDeleteDialogOpen(false);
@@ -715,18 +696,9 @@ export default function Setting() {
   };
 
 
-  // ======================================================
-  // SAVED JOBS
-  // ======================================================
-
   const handleSavedJobs = () => {
-    window.location.href = "/main/saved-jobs";
+    window.location.href = "/main/Saved_Job";
   };
-
-
-  // ======================================================
-  // LOADING SCREEN
-  // ======================================================
 
   if (pageLoading) {
     return (
@@ -746,30 +718,6 @@ export default function Setting() {
 
   return (
     <div className="w-full space-y-6 pb-10">
-
-
-      {/* ==================================================
-          GLOBAL MESSAGE
-      ================================================== */}
-
-      {message && (
-        <div
-          className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm ${
-            messageType === "success"
-              ? "border-green-200 bg-green-50 text-green-700"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-        >
-          {messageType === "success" ? (
-            <CheckCircle2 className="h-5 w-5 shrink-0" />
-          ) : (
-            <XCircle className="h-5 w-5 shrink-0" />
-          )}
-
-          <span>{message}</span>
-        </div>
-      )}
-
 
       {/* ==================================================
           ACCOUNT SETTINGS
@@ -873,26 +821,22 @@ export default function Setting() {
 
 
           {/* ==================================================
-              PERSONAL INFORMATION
+              PERSONAL + ADDITIONAL INFORMATION
           ================================================== */}
 
           <section className="rounded-xl border bg-white p-6 shadow-sm">
 
             <div className="mb-6">
-
               <h2 className="text-xl font-semibold text-slate-900">
                 Personal Information
               </h2>
-
               <p className="mt-1 text-sm text-slate-500">
-                Update your personal details and how others see you.
+                Manage your personal, professional and contact information.
+                All fields are required.
               </p>
-
             </div>
 
-
             <div className="grid gap-6 lg:grid-cols-[120px_1fr]">
-
 
               {/* PROFILE PHOTO */}
 
@@ -911,15 +855,12 @@ export default function Setting() {
                     ) : (
                       <span>
                         {profile.full_name
-                          ? profile.full_name
-                              .charAt(0)
-                              .toUpperCase()
+                          ? profile.full_name.charAt(0).toUpperCase()
                           : "V"}
                       </span>
                     )}
 
                   </div>
-
 
                   <label
                     htmlFor="profile-photo"
@@ -938,7 +879,6 @@ export default function Setting() {
 
                 </div>
 
-
                 <label
                   htmlFor="profile-photo"
                   className="mt-3 cursor-pointer text-center text-sm font-medium text-blue-600 hover:text-blue-700"
@@ -954,42 +894,33 @@ export default function Setting() {
 
               </div>
 
-
-              {/* PROFILE FIELDS */}
+              {/* ALL PROFILE + ADDITIONAL FIELDS */}
 
               <div className="grid gap-5 md:grid-cols-2">
-
 
                 {/* FULL NAME */}
 
                 <div className="space-y-2">
-
-                  <Label htmlFor="full_name">
+                  <RequiredLabel htmlFor="full_name">
                     Full Name
-                  </Label>
+                  </RequiredLabel>
 
                   <Input
                     id="full_name"
                     value={profile.full_name}
                     onChange={(e) =>
-                      updateProfile(
-                        "full_name",
-                        e.target.value
-                      )
+                      updateProfile("full_name", e.target.value)
                     }
                     placeholder="Enter full name"
                   />
-
                 </div>
-
 
                 {/* EMAIL */}
 
                 <div className="space-y-2">
-
-                  <Label htmlFor="email">
+                  <RequiredLabel htmlFor="email">
                     Email Address
-                  </Label>
+                  </RequiredLabel>
 
                   <Input
                     id="email"
@@ -998,154 +929,288 @@ export default function Setting() {
                     disabled
                     className="bg-slate-50"
                   />
-
                 </div>
-
 
                 {/* PHONE */}
 
                 <div className="space-y-2">
-
-                  <Label htmlFor="phone">
+                  <RequiredLabel htmlFor="phone">
                     Phone Number
-                  </Label>
+                  </RequiredLabel>
 
                   <Input
                     id="phone"
-                    value={profile.phone_number}
+                    value={profile.phone}
                     onChange={(e) =>
-                      updateProfile(
-                        "phone_number",
-                        e.target.value
-                      )
+                      updateProfile("phone", e.target.value)
                     }
                     placeholder="+91 9876543210"
                   />
-
                 </div>
-
 
                 {/* LOCATION */}
 
                 <div className="space-y-2">
-
-                  <Label htmlFor="location">
+                  <RequiredLabel htmlFor="location">
                     Location
-                  </Label>
+                  </RequiredLabel>
 
                   <Input
                     id="location"
                     value={profile.location}
                     onChange={(e) =>
-                      updateProfile(
-                        "location",
-                        e.target.value
-                      )
+                      updateProfile("location", e.target.value)
                     }
                     placeholder="Jaipur, Rajasthan, India"
                   />
-
                 </div>
 
-
-                {/* JOB TITLE */}
+                {/* CURRENT JOB TITLE */}
 
                 <div className="space-y-2">
-
-                  <Label htmlFor="job-title">
+                  <RequiredLabel htmlFor="job_title">
                     Current Job Title
-                  </Label>
+                  </RequiredLabel>
 
                   <Input
-                    id="job-title"
-                    value={profile.current_job_title}
+                    id="job_title"
+                    value={profile.job_title}
                     onChange={(e) =>
                       updateProfile(
-                        "current_job_title",
+                        "job_title",
                         e.target.value
                       )
                     }
                     placeholder="e.g. Software Engineer"
                   />
-
                 </div>
-
 
                 {/* EXPERIENCE */}
 
                 <div className="space-y-2">
-
-                  <Label>
+                  <RequiredLabel htmlFor="experience">
                     Experience (Years)
-                  </Label>
+                  </RequiredLabel>
 
                   <Select
-                    value={profile.experience_years}
+                    value={profile.experience}
                     onValueChange={(value) =>
-                      updateProfile(
-                        "experience_years",
-                        value
-                      )
+                      updateProfile("experience", value)
                     }
                   >
-
-                    <SelectTrigger>
+                    <SelectTrigger id="experience">
                       <SelectValue placeholder="Select experience" />
                     </SelectTrigger>
 
                     <SelectContent>
-
-                      <SelectItem value="0">
-                        Fresher
-                      </SelectItem>
-
-                      <SelectItem value="1">
-                        1 Year
-                      </SelectItem>
-
-                      <SelectItem value="2">
-                        2 Years
-                      </SelectItem>
-
-                      <SelectItem value="3">
-                        3 Years
-                      </SelectItem>
-
-                      <SelectItem value="4">
-                        4 Years
-                      </SelectItem>
-
-                      <SelectItem value="5">
-                        5+ Years
-                      </SelectItem>
-
-                      <SelectItem value="10">
-                        10+ Years
-                      </SelectItem>
-
+                      <SelectItem value="0-1">0 - 1 years</SelectItem>
+                      <SelectItem value="1-3">1 - 3 years</SelectItem>
+                      <SelectItem value="3-5">3 - 5 years</SelectItem>
+                      <SelectItem value="5-10">5 - 10 years</SelectItem>
+                      <SelectItem value="10+">10+ years</SelectItem>
                     </SelectContent>
-
                   </Select>
-
                 </div>
 
+                {/* DATE OF BIRTH */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="dob">
+                    Date of Birth
+                  </RequiredLabel>
+
+                  <Input
+                    id="dob"
+                    type="date"
+                    value={profile.dob}
+                    onChange={(e) =>
+                      updateProfile("dob", e.target.value)
+                    }
+                  />
+                </div>
+
+                {/* GENDER */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="gender">
+                    Gender
+                  </RequiredLabel>
+
+                  <Select
+                    value={profile.gender}
+                    onValueChange={(value) =>
+                      updateProfile("gender", value)
+                    }
+                  >
+                    <SelectTrigger id="gender">
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      <SelectItem value="Male">
+                        Male
+                      </SelectItem>
+                      <SelectItem value="Female">
+                        Female
+                      </SelectItem>
+                      <SelectItem value="Other">
+                        Other
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* LINKEDIN */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="linkedin">
+                    LinkedIn Profile
+                  </RequiredLabel>
+
+                  <Input
+                    id="linkedin"
+                    value={profile.linkedin}
+                    onChange={(e) =>
+                      updateProfile(
+                        "linkedin",
+                        e.target.value
+                      )
+                    }
+                    placeholder="https://linkedin.com/in/yourprofile"
+                  />
+                </div>
+
+                {/* PORTFOLIO */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="portfolio">
+                    Portfolio / Website
+                  </RequiredLabel>
+
+                  <Input
+                    id="portfolio"
+                    value={profile.portfolio}
+                    onChange={(e) =>
+                      updateProfile(
+                        "portfolio",
+                        e.target.value
+                      )
+                    }
+                    placeholder="https://yourwebsite.com"
+                  />
+                </div>
+
+                {/* GITHUB */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="github">
+                    GitHub Profile
+                  </RequiredLabel>
+
+                  <Input
+                    id="github"
+                    value={profile.github}
+                    onChange={(e) =>
+                      updateProfile(
+                        "github",
+                        e.target.value
+                      )
+                    }
+                    placeholder="https://github.com/username"
+                  />
+                </div>
+
+                {/* CURRENT SALARY */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="current_salary">
+                    Current Salary (Annual)
+                  </RequiredLabel>
+
+                  <Input
+                    id="current_salary"
+                    type="number"
+                    value={profile.current_salary}
+                    onChange={(e) =>
+                      updateProfile(
+                        "current_salary",
+                        e.target.value
+                      )
+                    }
+                    placeholder="e.g. 600000"
+                  />
+                </div>
+
+                {/* EXPECTED SALARY */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="expected_salary">
+                    Expected Salary (Annual)
+                  </RequiredLabel>
+
+                  <Input
+                    id="expected_salary"
+                    type="number"
+                    value={profile.expected_salary}
+                    onChange={(e) =>
+                      updateProfile(
+                        "expected_salary",
+                        e.target.value
+                      )
+                    }
+                    placeholder="e.g. 800000"
+                  />
+                </div>
+
+                {/* NOTICE PERIOD */}
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="notice_period">
+                    Notice Period
+                  </RequiredLabel>
+
+                  <Select
+                    value={profile.notice_period}
+                    onValueChange={(value) =>
+                      updateProfile("notice_period", value)
+                    }
+                  >
+                    <SelectTrigger id="notice_period">
+                      <SelectValue placeholder="Select notice period" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      <SelectItem value="immediate">
+                        Immediate
+                      </SelectItem>
+                      <SelectItem value="15">
+                        15 Days
+                      </SelectItem>
+                      <SelectItem value="30">
+                        30 Days
+                      </SelectItem>
+                      <SelectItem value="60">
+                        60 Days
+                      </SelectItem>
+                      <SelectItem value="90">
+                        90 Days
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 {/* ABOUT */}
 
                 <div className="space-y-2 md:col-span-2">
-
-                  <Label htmlFor="about">
+                  <RequiredLabel htmlFor="about">
                     About Me
-                  </Label>
+                  </RequiredLabel>
 
                   <Textarea
                     id="about"
-                    value={profile.about_me}
+                    value={profile.about}
                     onChange={(e) =>
-                      updateProfile(
-                        "about_me",
-                        e.target.value
-                      )
+                      updateProfile("about", e.target.value)
                     }
                     maxLength={500}
                     rows={4}
@@ -1153,15 +1218,13 @@ export default function Setting() {
                   />
 
                   <div className="text-right text-xs text-slate-400">
-                    {profile.about_me.length}/500
+                    {profile.about.length}/500
                   </div>
-
                 </div>
 
               </div>
 
             </div>
-
 
             {/* SAVE */}
 
@@ -1172,7 +1235,6 @@ export default function Setting() {
                 disabled={profileLoading}
                 className="gap-2"
               >
-
                 {profileLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -1182,272 +1244,12 @@ export default function Setting() {
                 {profileLoading
                   ? "Saving..."
                   : "Save Changes"}
-
               </Button>
 
             </div>
 
           </section>
 
-
-          {/* ==================================================
-              ADDITIONAL INFORMATION
-          ================================================== */}
-
-          <section className="rounded-xl border bg-white p-6 shadow-sm">
-
-            <div className="mb-6">
-
-              <h2 className="text-lg font-semibold text-slate-900">
-                Additional Information
-              </h2>
-
-            </div>
-
-
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-
-
-              {/* DOB */}
-
-              <div className="space-y-2">
-
-                <Label htmlFor="dob">
-                  Date of Birth
-                </Label>
-
-                <Input
-                  id="dob"
-                  type="date"
-                  value={profile.date_of_birth}
-                  onChange={(e) =>
-                    updateProfile(
-                      "date_of_birth",
-                      e.target.value
-                    )
-                  }
-                />
-
-              </div>
-
-
-              {/* GENDER */}
-
-              <div className="space-y-2">
-
-                <Label>
-                  Gender
-                </Label>
-
-                <Select
-                  value={profile.gender}
-                  onValueChange={(value) =>
-                    updateProfile(
-                      "gender",
-                      value
-                    )
-                  }
-                >
-
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-
-                    <SelectItem value="male">
-                      Male
-                    </SelectItem>
-
-                    <SelectItem value="female">
-                      Female
-                    </SelectItem>
-
-                    <SelectItem value="other">
-                      Other
-                    </SelectItem>
-
-                    <SelectItem value="prefer_not_to_say">
-                      Prefer not to say
-                    </SelectItem>
-
-                  </SelectContent>
-
-                </Select>
-
-              </div>
-
-
-              {/* LINKEDIN */}
-
-              <div className="space-y-2">
-
-                <Label htmlFor="linkedin">
-                  LinkedIn Profile
-                </Label>
-
-                <Input
-                  id="linkedin"
-                  value={profile.linkedin_profile}
-                  onChange={(e) =>
-                    updateProfile(
-                      "linkedin_profile",
-                      e.target.value
-                    )
-                  }
-                  placeholder="https://linkedin.com/in/yourprofile"
-                />
-
-              </div>
-
-
-              {/* PORTFOLIO */}
-
-              <div className="space-y-2">
-
-                <Label htmlFor="portfolio">
-                  Portfolio / Website
-                </Label>
-
-                <Input
-                  id="portfolio"
-                  value={profile.portfolio_website}
-                  onChange={(e) =>
-                    updateProfile(
-                      "portfolio_website",
-                      e.target.value
-                    )
-                  }
-                  placeholder="https://yourwebsite.com"
-                />
-
-              </div>
-
-
-              {/* GITHUB */}
-
-              <div className="space-y-2">
-
-                <Label htmlFor="github">
-                  GitHub Profile
-                </Label>
-
-                <Input
-                  id="github"
-                  value={profile.github_profile}
-                  onChange={(e) =>
-                    updateProfile(
-                      "github_profile",
-                      e.target.value
-                    )
-                  }
-                  placeholder="https://github.com/username"
-                />
-
-              </div>
-
-
-              {/* CURRENT SALARY */}
-
-              <div className="space-y-2">
-
-                <Label htmlFor="current-salary">
-                  Current Salary (Annual)
-                </Label>
-
-                <Input
-                  id="current-salary"
-                  type="number"
-                  value={profile.current_salary}
-                  onChange={(e) =>
-                    updateProfile(
-                      "current_salary",
-                      e.target.value
-                    )
-                  }
-                  placeholder="e.g. 600000"
-                />
-
-              </div>
-
-
-              {/* EXPECTED SALARY */}
-
-              <div className="space-y-2">
-
-                <Label htmlFor="expected-salary">
-                  Expected Salary (Annual)
-                </Label>
-
-                <Input
-                  id="expected-salary"
-                  type="number"
-                  value={profile.expected_salary}
-                  onChange={(e) =>
-                    updateProfile(
-                      "expected_salary",
-                      e.target.value
-                    )
-                  }
-                  placeholder="e.g. 800000"
-                />
-
-              </div>
-
-
-              {/* NOTICE PERIOD */}
-
-              <div className="space-y-2">
-
-                <Label>
-                  Notice Period
-                </Label>
-
-                <Select
-                  value={profile.notice_period}
-                  onValueChange={(value) =>
-                    updateProfile(
-                      "notice_period",
-                      value
-                    )
-                  }
-                >
-
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select notice period" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-
-                    <SelectItem value="immediate">
-                      Immediate
-                    </SelectItem>
-
-                    <SelectItem value="15">
-                      15 Days
-                    </SelectItem>
-
-                    <SelectItem value="30">
-                      30 Days
-                    </SelectItem>
-
-                    <SelectItem value="60">
-                      60 Days
-                    </SelectItem>
-
-                    <SelectItem value="90">
-                      90 Days
-                    </SelectItem>
-
-                  </SelectContent>
-
-                </Select>
-
-              </div>
-
-            </div>
-
-          </section>
 
 
           {/* ==================================================
@@ -1981,6 +1783,8 @@ export default function Setting() {
       {/* ==================================================
           DELETE ACCOUNT DIALOG
       ================================================== */}
+
+      <Toaster />
 
       <AlertDialog
         open={deleteDialogOpen}

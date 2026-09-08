@@ -41,7 +41,7 @@ const statusStyles = {
   Selected: "bg-emerald-50 text-emerald-700",
   Rejected: "bg-red-50 text-red-600",
 };
-const statusOptions = ["Pending", "Reviewed", "Shortlisted","interview", "Selected", "Rejected"];
+const statusOptions = ["Pending", "Reviewed", "Shortlisted", "interview", "Selected", "Rejected"];
 
 const AVATAR_COLORS = [
   "bg-blue-100 text-blue-600",
@@ -80,6 +80,8 @@ export default function JobApplicants() {
   const [draftStatus, setDraftStatus] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [interviewDate, setInterviewDate] = useState("");
+  const [interviewTime, setInterviewTime] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
@@ -91,7 +93,7 @@ export default function JobApplicants() {
   const [exporting, setExporting] = useState(false);
 
   const debounceRef = useRef(null);
-  
+
   const token = localStorage.getItem("access");
   // Debounce the search box -> searchQuery (waits 400ms after typing stops)
   const handleSearchChange = (value) => {
@@ -166,9 +168,13 @@ export default function JobApplicants() {
       setOpenId(null);
       return;
     }
+
     setOpenId(record.id);
     setDraftStatus(record.status);
     setDraftNotes(record.notes || "");
+
+    setInterviewDate(record.interview_date || "");
+    setInterviewTime(record.interview_time || "");
   };
 
   // Update status/notes. Tries a PATCH to the API; falls back to a local-only
@@ -182,6 +188,15 @@ export default function JobApplicants() {
         {
           status: draftStatus,
           notes: draftNotes,
+          interview_date:
+            draftStatus.toLowerCase() === "interview"
+              ? interviewDate
+              : null,
+
+          interview_time:
+            draftStatus.toLowerCase() === "interview"
+              ? interviewTime
+              : null,
         },
         {
           headers: {
@@ -415,7 +430,44 @@ export default function JobApplicants() {
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
+
                                   </Select>
+
+                                  {/* Interview Date & Time */}
+                                  {draftStatus.toLowerCase() === "interview" && (
+                                    <div className="grid grid-cols-2 gap-3">
+
+                                      {/* Interview Date */}
+                                      <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-gray-500">
+                                          Interview Date
+                                        </label>
+
+                                        <input
+                                          type="date"
+                                          value={interviewDate}
+                                          onChange={(e) => setInterviewDate(e.target.value)}
+                                          min={new Date().toISOString().split("T")[0]}
+                                          className="w-full h-9 rounded-md border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
+                                        />
+                                      </div>
+
+                                      {/* Interview Time */}
+                                      <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-gray-500">
+                                          Interview Time
+                                        </label>
+
+                                        <input
+                                          type="time"
+                                          value={interviewTime}
+                                          onChange={(e) => setInterviewTime(e.target.value)}
+                                          className="w-full h-9 rounded-md border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
+                                        />
+                                      </div>
+
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="space-y-1.5">

@@ -67,74 +67,75 @@ export default function SavedList() {
   const [location, setLocation] = React.useState("all");
   const [jobType, setJobType] = React.useState("all");
   const [sortBy, setSortBy] = React.useState("recent");
-
+  const [currentPage, setCurrentPage] = React.useState(1);
+const [totalPages, setTotalPages] = React.useState(1);
+const [totalCount, setTotalCount] = React.useState(0);
 
   // ======================================================
   // GET SAVED JOBS
   // ======================================================
 
-  const fetchSavedJobs = async () => {
-    try {
-      setLoading(true);
-      setError("");
+ const fetchSavedJobs = async () => {
+  try {
+    setLoading(true);
+    setError("");
 
-      const token =
-        typeof window !== "undefined"
-          ? localStorage.getItem("access")
-          : null;
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("access")
+        : null;
 
-      const API_URL = process.env.NEXT_PUBLIC_API;
+    const API_URL = process.env.NEXT_PUBLIC_API;
 
-      const response = await fetch(
-        `${API_URL}/api/saved-jobs/`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-
-            ...(token
-              ? {
-                Authorization: `Bearer ${token}`,
-              }
-              : {}),
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch saved jobs (${response.status})`
-        );
+    const response = await fetch(
+      `${API_URL}/api/saved-jobs/?page=${currentPage}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token
+            ? { Authorization: `Bearer ${token}` }
+            : {}),
+        },
       }
+    );
 
-      const data = await response.json();
-
-      console.log("Saved Jobs API:", data);
-
-      if (data.success) {
-        setJobs(data.jobs || []);
-      } else {
-        setJobs([]);
-      }
-    } catch (error) {
-      console.error(error);
-
-      setError(
-        "Unable to load saved jobs. Please try again."
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch saved jobs (${response.status})`
       );
-    } finally {
-      setLoading(false);
     }
-  };
 
+    const data = await response.json();
+
+    console.log("Saved Jobs API:", data);
+
+    // Pagination response
+    if (data.results?.success) {
+      setJobs(data.results.jobs || []);
+      setTotalCount(data.count || 0);
+      setTotalPages(Math.ceil((data.count || 0) / 6));
+    } else {
+      setJobs([]);
+      setTotalCount(0);
+      setTotalPages(1);
+    }
+
+  } catch (error) {
+    console.error(error);
+    setError("Unable to load saved jobs. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ======================================================
   // INITIAL LOAD
   // ======================================================
 
-  React.useEffect(() => {
-    fetchSavedJobs();
-  }, []);
+React.useEffect(() => {
+  fetchSavedJobs();
+}, [currentPage]);
 
 
   // ======================================================
@@ -856,6 +857,57 @@ export default function SavedList() {
           </Card>
 
         )}
+
+      {/* PAGINATION */}
+{totalPages > 1 && (
+  <div className="mt-10 flex items-center justify-center gap-2">
+
+    {/* Previous */}
+    <Button
+      variant="outline"
+      disabled={currentPage === 1 || loading}
+      onClick={() =>
+        setCurrentPage((page) => page - 1)
+      }
+      className="h-10 rounded-lg px-4"
+    >
+      Previous
+    </Button>
+
+    {/* Page Numbers */}
+    {Array.from(
+      { length: totalPages },
+      (_, index) => index + 1
+    ).map((page) => (
+      <Button
+        key={page}
+        variant={currentPage === page ? "default" : "outline"}
+        disabled={loading}
+        onClick={() => setCurrentPage(page)}
+        className={`h-10 min-w-10 rounded-lg ${
+          currentPage === page
+            ? "bg-blue-600 text-white hover:bg-blue-700"
+            : "border-slate-200 bg-white text-slate-700 hover:bg-blue-50"
+        }`}
+      >
+        {page}
+      </Button>
+    ))}
+
+    {/* Next */}
+    <Button
+      variant="outline"
+      disabled={currentPage === totalPages || loading}
+      onClick={() =>
+        setCurrentPage((page) => page + 1)
+      }
+      className="h-10 rounded-lg px-4"
+    >
+      Next
+    </Button>
+
+  </div>
+)}
 
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Bookmark } from "lucide-react";
@@ -66,6 +66,12 @@ const SAVED_JOBS_URL = `${process.env.NEXT_PUBLIC_API}/api/saved-jobs/`;
 
 const VISIBLE_CARDS = 2;
 const CARD_HEIGHT = 104;
+
+// How many extra cards to reveal every time the user scrolls near the
+// bottom of the list. Keeping this small is what makes the "load on
+// scroll" behaviour actually help performance (fewer DOM nodes / images
+// mounted at once instead of rendering the entire jobs array up front).
+const PAGE_SIZE = 5;
 
 // -----------------------------------------------------------------------------
 // TIME AGO
@@ -166,6 +172,24 @@ async function saveOrUnsaveJob(
 }
 
 // -----------------------------------------------------------------------------
+// SORT JOBS — NEWEST FIRST (DESCENDING BY created_at)
+// -----------------------------------------------------------------------------
+
+function sortJobsDescending(list: Job[]): Job[] {
+  return [...list].sort((a, b) => {
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+
+    // Push invalid/missing dates to the end instead of letting
+    // NaN comparisons silently break the sort order.
+    const safeA = Number.isNaN(timeA) ? -Infinity : timeA;
+    const safeB = Number.isNaN(timeB) ? -Infinity : timeB;
+
+    return safeB - safeA;
+  });
+}
+
+// -----------------------------------------------------------------------------
 // COMPANY LOGO
 // -----------------------------------------------------------------------------
 
@@ -190,6 +214,7 @@ function CompanyLogo({ job }: { job: Job }) {
       alt={`${job.company_name} logo`}
       onError={() => setErrored(true)}
       className="h-12 w-12 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1"
+      loading="lazy"
     />
   );
 }
@@ -236,6 +261,19 @@ export default function RecommendedJobs() {
   const [pendingJobs, setPendingJobs] = useState<Set<number>>(
     new Set()
   );
+
+  // How many jobs are currently rendered on screen. Starts at PAGE_SIZE
+  // and grows as the user scrolls, instead of mounting every job/card
+  // (and every logo <img>) up front.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Scrollable list container (the same element that already had
+  // overflow-y-auto) — we watch scroll position on this element.
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Invisible marker placed after the last rendered card. When it
+  // enters the scroll container's viewport we reveal more cards.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // ---------------------------------------------------------------------------
   // LOAD JOBS + SAVED JOBS
@@ -346,8 +384,10 @@ export default function RecommendedJobs() {
         // ---------------------------------------------------------------------
 
         if (!cancelled) {
-          setJobs(jobsData);
+          // Newest jobs first.
+          setJobs(sortJobsDescending(jobsData));
           setSavedJobs(savedIds);
+          setVisibleCount(PAGE_SIZE);
         }
       } catch (err) {
         if (!cancelled) {
@@ -372,6 +412,54 @@ export default function RecommendedJobs() {
       cancelled = true;
     };
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // LOAD MORE ON SCROLL
+  //
+  // Uses an IntersectionObserver scoped to the scrollable card list, so
+  // more cards are only mounted once the sentinel div at the bottom of
+  // the currently rendered set scrolls into view.
+  // ---------------------------------------------------------------------------
+
+  const loadMore = useCallback(() => {
+    setVisibleCount((previous) => {
+      if (previous >= jobs.length) {
+        return previous;
+      }
+
+      return Math.min(previous + PAGE_SIZE, jobs.length);
+    });
+  }, [jobs.length]);
+
+  useEffect(() => {
+    const root = scrollContainerRef.current;
+    const sentinel = sentinelRef.current;
+
+    if (!root || !sentinel) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            loadMore();
+          }
+        });
+      },
+      {
+        root,
+        rootMargin: "100px",
+        threshold: 0,
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [loadMore, jobs.length]);
 
   // ---------------------------------------------------------------------------
   // SAVE JOB
@@ -498,6 +586,13 @@ export default function RecommendedJobs() {
   };
 
   // ---------------------------------------------------------------------------
+  // JOBS CURRENTLY RENDERED (windowed slice of the full, sorted list)
+  // ---------------------------------------------------------------------------
+
+  const visibleJobs = jobs.slice(0, visibleCount);
+  const hasMore = visibleCount < jobs.length;
+
+  // ---------------------------------------------------------------------------
   // RENDER
   // ---------------------------------------------------------------------------
 
@@ -526,6 +621,7 @@ export default function RecommendedJobs() {
       {/* ------------------------------------------------------------------ */}
 
       <div
+        ref={scrollContainerRef}
         className="mt-5 flex flex-col gap-4 overflow-y-auto pr-1"
         style={{
           maxHeight: VISIBLE_CARDS * CARD_HEIGHT,
@@ -571,7 +667,7 @@ export default function RecommendedJobs() {
 
         {!loading &&
           !error &&
-          jobs.map((job) => {
+          visibleJobs.map((job) => {
             const isSaved = savedJobs.has(job.id);
 
             const isPending =
@@ -689,7 +785,7 @@ export default function RecommendedJobs() {
                   {/* -------------------------------------------------- */}
 
                   <Button
-                  
+
                     variant="outline"
                     className="
                       transition-all
@@ -709,6 +805,17 @@ export default function RecommendedJobs() {
               </div>
             );
           })}
+
+        {/* --------------------------------------------------------------- */}
+        {/* LOAD-MORE SENTINEL + INLINE LOADER */}
+        {/* --------------------------------------------------------------- */}
+
+        {!loading && !error && hasMore && (
+          <>
+            <div ref={sentinelRef} aria-hidden="true" />
+            <JobCardSkeleton />
+          </>
+        )}
       </div>
     </Card>
   );

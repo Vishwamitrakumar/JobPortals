@@ -6,6 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from ..models import Job
 from ..model.savejob import SavedJob
 from ..serializer.SavedJobList import SavedJobSerializer
+from .pagination import SavedJobPagination
+
 
 class SaveJobAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -74,16 +76,22 @@ class SavedJobListAPIView(APIView):
             .order_by("-created_at")
         )
 
-        serializer = SavedJobSerializer(
+        # Pagination
+        paginator = SavedJobPagination()
+
+        paginated_jobs = paginator.paginate_queryset(
             saved_jobs,
+            request
+        )
+
+        # Serialize only current page
+        serializer = SavedJobSerializer(
+            paginated_jobs,
             many=True
         )
 
-        return Response(
-            {
-                "success": True,
-                "count": saved_jobs.count(),
-                "jobs": serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
+        # Paginated response
+        return paginator.get_paginated_response({
+            "success": True,
+            "jobs": serializer.data
+        })

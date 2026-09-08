@@ -37,7 +37,7 @@ const menu = [
   { title: "My Applications", href: "/main/MyApplication", icon: FileText },
   { title: "Job Post", href: "/main/Jobpost", icon: BriefcaseBusiness },
   { title: "Applicants", href: "/main/Applicants", icon: BriefcaseBusiness },
-  { title: "Saved", href: "/main/SavedList", icon: Bookmark },
+  { title: "Saved", href: "/main/Saved_Job", icon: Bookmark },
   { title: "Profile", href: "/main/Profile", icon: User },
   { title: "Resume", href: "/main/Resume", icon: FileBadge },
   { title: "Notifications", href: "/main/Notifications", icon: Bell },
@@ -45,7 +45,7 @@ const menu = [
 ];
 
 const pages = [
-  { title: "Browse Jobs", href: "/jobs", icon: Search },
+ 
   { title: "Companies", href: "/main/Company", icon: Building2 },
   { title: "Help Center", href: "/main/HelpCenter", icon: CircleHelp },
 ];
