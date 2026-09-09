@@ -4,25 +4,31 @@ from datetime import timedelta
 from dotenv import load_dotenv
 
 
-# --------------------------------------------------
+# ==================================================
 # BASE CONFIG
-# --------------------------------------------------
+# ==================================================
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# --------------------------------------------------
+# ==================================================
 # SECURITY
-# --------------------------------------------------
+# ==================================================
 
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
-    "django-insecure-change-this-in-production"
+    "django-insecure-change-this-in-production",
 )
 
+# Local .env:
+# DEBUG=True
+#
+# Render:
+# DEBUG=False
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+
 
 ALLOWED_HOSTS = [
     "localhost",
@@ -31,77 +37,85 @@ ALLOWED_HOSTS = [
 ]
 
 
-# --------------------------------------------------
-# MEDIA
-# --------------------------------------------------
-
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
-
-# --------------------------------------------------
+# ==================================================
 # APPLICATIONS
-# --------------------------------------------------
+# ==================================================
 
 INSTALLED_APPS = [
+    # Your apps
     "Jobportal",
-
-    "rest_framework",
-    "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklist",
-
-    "corsheaders",
-
     "home",
 
+    # Django
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+
+    # REST Framework
+    "rest_framework",
+
+    # JWT
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+
+    # CORS
+    "corsheaders",
 ]
 
 
-# --------------------------------------------------
+# ==================================================
 # MIDDLEWARE
-# --------------------------------------------------
+# ==================================================
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
 
     "django.middleware.security.SecurityMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
+
     "django.middleware.common.CommonMiddleware",
+
     "django.middleware.csrf.CsrfViewMiddleware",
+
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+
     "django.contrib.messages.middleware.MessageMiddleware",
+
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 
-# --------------------------------------------------
+# ==================================================
 # URL / WSGI
-# --------------------------------------------------
+# ==================================================
 
 ROOT_URLCONF = "config.urls"
 
 WSGI_APPLICATION = "config.wsgi.application"
 
 
-# --------------------------------------------------
+# ==================================================
 # TEMPLATES
-# --------------------------------------------------
+# ==================================================
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
+
         "DIRS": [],
+
         "APP_DIRS": True,
+
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
+
                 "django.contrib.auth.context_processors.auth",
+
                 "django.contrib.messages.context_processors.messages",
             ],
         },
@@ -109,25 +123,54 @@ TEMPLATES = [
 ]
 
 
-# --------------------------------------------------
+# ==================================================
 # DATABASE
-# --------------------------------------------------
+# ==================================================
+#
+# IMPORTANT:
+# Local  -> values come from .env
+# Render -> values come from Render Environment Variables
+#
+# Required Render variables:
+#
+# DB_NAME
+# DB_USER
+# DB_PASSWORD
+# DB_HOST
+# DB_PORT
+#
+# ==================================================
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
+
         "NAME": os.getenv("DB_NAME"),
+
         "USER": os.getenv("DB_USER"),
+
         "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-        "PORT": os.getenv("DB_PORT", "3306"),
+
+        "HOST": os.getenv(
+            "DB_HOST",
+            "127.0.0.1",
+        ),
+
+        "PORT": os.getenv(
+            "DB_PORT",
+            "3306",
+        ),
+
+        "OPTIONS": {
+            "charset": "utf8mb4",
+        },
     }
 }
 
 
-# --------------------------------------------------
+# ==================================================
 # PASSWORD VALIDATION
-# --------------------------------------------------
+# ==================================================
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -157,44 +200,70 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# --------------------------------------------------
+# ==================================================
 # INTERNATIONALIZATION
-# --------------------------------------------------
+# ==================================================
 
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "UTC"
 
 USE_I18N = True
+
 USE_TZ = True
 
 
-# --------------------------------------------------
-# STATIC
-# --------------------------------------------------
+# ==================================================
+# STATIC FILES
+# ==================================================
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
-# --------------------------------------------------
+# ==================================================
+# MEDIA FILES
+# ==================================================
+
+MEDIA_URL = "/media/"
+
+MEDIA_ROOT = BASE_DIR / "media"
+
+
+# ==================================================
 # CORS
-# --------------------------------------------------
+# ==================================================
+#
+# IMPORTANT:
+# Your live frontend is:
+# https://job-portal-ebon-delta.vercel.app
+#
+# ==================================================
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://talvoro.vercel.app",
 ]
 
-# Agar Vite frontend bhi use kar rahe ho:
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://localhost:5173",
-# ]
+
+# If your frontend sends cookies/auth credentials:
+CORS_ALLOW_CREDENTIALS = True
 
 
-# --------------------------------------------------
+# ==================================================
+# CSRF
+# ==================================================
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "https://talvoro.vercel.app",
+]
+
+
+# ==================================================
 # DJANGO REST FRAMEWORK
-# --------------------------------------------------
+# ==================================================
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -207,9 +276,9 @@ REST_FRAMEWORK = {
 }
 
 
-# --------------------------------------------------
+# ==================================================
 # SIMPLE JWT
-# --------------------------------------------------
+# ==================================================
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(
@@ -230,9 +299,9 @@ SIMPLE_JWT = {
 }
 
 
-# --------------------------------------------------
+# ==================================================
 # GOOGLE GEMINI
-# --------------------------------------------------
+# ==================================================
 
 GEMINI_API_KEY = os.getenv(
     "GEMINI_API_KEY"
@@ -240,10 +309,12 @@ GEMINI_API_KEY = os.getenv(
 
 GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
-    "gemini-3.7-flash"
+    "gemini-3.7-flash",
 )
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "https://talvoro.vercel.app",
-]
+
+# ==================================================
+# DEFAULT PRIMARY KEY
+# ==================================================
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
