@@ -995,7 +995,7 @@ export default function Setting() {
                   <Select
                     value={profile.experience}
                     onValueChange={(value) =>
-                      updateProfile("experience", value)
+                      updateProfile("experience", value ?? "")
                     }
                   >
                     <SelectTrigger id="experience">
@@ -1039,7 +1039,7 @@ export default function Setting() {
                   <Select
                     value={profile.gender}
                     onValueChange={(value) =>
-                      updateProfile("gender", value)
+                      updateProfile("gender", value ?? "")
                     }
                   >
                     <SelectTrigger id="gender">
@@ -1172,7 +1172,7 @@ export default function Setting() {
                   <Select
                     value={profile.notice_period}
                     onValueChange={(value) =>
-                      updateProfile("notice_period", value)
+                      updateProfile("notice_period", value ?? "")
                     }
                   >
                     <SelectTrigger id="notice_period">
@@ -1645,7 +1645,7 @@ export default function Setting() {
                   onValueChange={(value) =>
                     setSettings((prev) => ({
                       ...prev,
-                      profileVisibility: value,
+                      profileVisibility: value ?? "",
                     }))
                   }
                 >

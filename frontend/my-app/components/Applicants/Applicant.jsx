@@ -75,7 +75,7 @@ export default function JobApplicants() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
+  const [token, setToken] = useState("");
   const [openId, setOpenId] = useState(null);
   const [draftStatus, setDraftStatus] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
@@ -94,7 +94,10 @@ export default function JobApplicants() {
 
   const debounceRef = useRef(null);
 
-  const token = localStorage.getItem("access");
+ useEffect(() => {
+  const storedToken = localStorage.getItem("access");
+  setToken(storedToken || "");
+}, []);
   // Debounce the search box -> searchQuery (waits 400ms after typing stops)
   const handleSearchChange = (value) => {
     setSearchInput(value);

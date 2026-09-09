@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState , useEffect } from "react";
 import {
   Bell,
   ChevronDown,
@@ -55,6 +55,7 @@ export default function JobPost() {
   const [openings, setOpenings] = useState("");
   const [benefits, setBenefits] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [token, setToken] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const router = useRouter();
   const showJobToast = (type: "success" | "error", title: string, message: string) => {
@@ -66,7 +67,10 @@ export default function JobPost() {
   };
 
   const API = process.env.NEXT_PUBLIC_API;
-  const accessToken = localStorage.getItem("access");
+  useEffect(() => {
+  const storedToken = localStorage.getItem("access");
+  setToken(storedToken || "");
+}, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +101,7 @@ export default function JobPost() {
       const response = await fetch(`${API}/api/jobs/create/`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: formData,
       });

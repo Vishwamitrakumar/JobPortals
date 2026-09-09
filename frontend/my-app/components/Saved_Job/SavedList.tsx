@@ -68,74 +68,74 @@ export default function SavedList() {
   const [jobType, setJobType] = React.useState("all");
   const [sortBy, setSortBy] = React.useState("recent");
   const [currentPage, setCurrentPage] = React.useState(1);
-const [totalPages, setTotalPages] = React.useState(1);
-const [totalCount, setTotalCount] = React.useState(0);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [totalCount, setTotalCount] = React.useState(0);
 
   // ======================================================
   // GET SAVED JOBS
   // ======================================================
 
- const fetchSavedJobs = async () => {
-  try {
-    setLoading(true);
-    setError("");
+  const fetchSavedJobs = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("access")
-        : null;
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access")
+          : null;
 
-    const API_URL = process.env.NEXT_PUBLIC_API;
+      const API_URL = process.env.NEXT_PUBLIC_API;
 
-    const response = await fetch(
-      `${API_URL}/api/saved-jobs/?page=${currentPage}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token
-            ? { Authorization: `Bearer ${token}` }
-            : {}),
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch saved jobs (${response.status})`
+      const response = await fetch(
+        `${API_URL}/api/saved-jobs/?page=${currentPage}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token
+              ? { Authorization: `Bearer ${token}` }
+              : {}),
+          },
+        }
       );
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch saved jobs (${response.status})`
+        );
+      }
+
+      const data = await response.json();
+
+      console.log("Saved Jobs API:", data);
+
+      // Pagination response
+      if (data.results?.success) {
+        setJobs(data.results.jobs || []);
+        setTotalCount(data.count || 0);
+        setTotalPages(Math.ceil((data.count || 0) / 6));
+      } else {
+        setJobs([]);
+        setTotalCount(0);
+        setTotalPages(1);
+      }
+
+    } catch (error) {
+      console.error(error);
+      setError("Unable to load saved jobs. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    const data = await response.json();
-
-    console.log("Saved Jobs API:", data);
-
-    // Pagination response
-    if (data.results?.success) {
-      setJobs(data.results.jobs || []);
-      setTotalCount(data.count || 0);
-      setTotalPages(Math.ceil((data.count || 0) / 6));
-    } else {
-      setJobs([]);
-      setTotalCount(0);
-      setTotalPages(1);
-    }
-
-  } catch (error) {
-    console.error(error);
-    setError("Unable to load saved jobs. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // ======================================================
   // INITIAL LOAD
   // ======================================================
 
-React.useEffect(() => {
-  fetchSavedJobs();
-}, [currentPage]);
+  React.useEffect(() => {
+    fetchSavedJobs();
+  }, [currentPage]);
 
 
   // ======================================================
@@ -180,6 +180,27 @@ React.useEffect(() => {
     } catch (error) {
       console.error(error);
     }
+  };
+
+
+  // ======================================================
+  // SELECT HANDLERS
+  // Some Select implementations (e.g. Base UI) call onValueChange
+  // with `string | null`, but our state setters are typed as
+  // `string`. These wrappers absorb the `null` case with a
+  // sensible fallback instead of passing the raw setter directly.
+  // ======================================================
+
+  const handleLocationChange = (value: string | null) => {
+    setLocation(value ?? "all");
+  };
+
+  const handleJobTypeChange = (value: string | null) => {
+    setJobType(value ?? "all");
+  };
+
+  const handleSortByChange = (value: string | null) => {
+    setSortBy(value ?? "recent");
   };
 
 
@@ -449,7 +470,7 @@ React.useEffect(() => {
 
               <Select
                 value={location}
-                onValueChange={setLocation}
+                onValueChange={handleLocationChange}
               >
 
                 <SelectTrigger className="h-14 w-full rounded-xl border-slate-200 font-serif shadow-none lg:w-[190px]">
@@ -496,7 +517,7 @@ React.useEffect(() => {
 
               <Select
                 value={jobType}
-                onValueChange={setJobType}
+                onValueChange={handleJobTypeChange}
               >
 
                 <SelectTrigger className="h-14 w-full rounded-xl border-slate-200 font-serif shadow-none lg:w-[180px]">
@@ -540,7 +561,7 @@ React.useEffect(() => {
 
               </Select>
 
-             
+
 
               {/* Refresh */}
 
@@ -591,7 +612,7 @@ React.useEffect(() => {
 
             <Select
               value={sortBy}
-              onValueChange={setSortBy}
+              onValueChange={handleSortByChange}
             >
 
               <SelectTrigger className="h-10 w-[145px] rounded-lg border-slate-200 bg-white font-serif shadow-none">
@@ -651,9 +672,9 @@ React.useEffect(() => {
 
                     <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
 
-                      {job.logo ? (
+                      {job.company_logo ? (
                         <img
-                          src={getLogoUrl(job.logo) || ""}
+                          src={getLogoUrl(job.company_logo) || ""}
                           alt={job.company}
                           className="h-full w-full object-contain p-1"
                         />
@@ -858,56 +879,56 @@ React.useEffect(() => {
 
         )}
 
-      {/* PAGINATION */}
-{totalPages > 1 && (
-  <div className="mt-10 flex items-center justify-center gap-2">
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+          <div className="mt-10 flex items-center justify-center gap-2">
 
-    {/* Previous */}
-    <Button
-      variant="outline"
-      disabled={currentPage === 1 || loading}
-      onClick={() =>
-        setCurrentPage((page) => page - 1)
-      }
-      className="h-10 rounded-lg px-4"
-    >
-      Previous
-    </Button>
+            {/* Previous */}
+            <Button
+              variant="outline"
+              disabled={currentPage === 1 || loading}
+              onClick={() =>
+                setCurrentPage((page) => page - 1)
+              }
+              className="h-10 rounded-lg px-4"
+            >
+              Previous
+            </Button>
 
-    {/* Page Numbers */}
-    {Array.from(
-      { length: totalPages },
-      (_, index) => index + 1
-    ).map((page) => (
-      <Button
-        key={page}
-        variant={currentPage === page ? "default" : "outline"}
-        disabled={loading}
-        onClick={() => setCurrentPage(page)}
-        className={`h-10 min-w-10 rounded-lg ${
-          currentPage === page
-            ? "bg-blue-600 text-white hover:bg-blue-700"
-            : "border-slate-200 bg-white text-slate-700 hover:bg-blue-50"
-        }`}
-      >
-        {page}
-      </Button>
-    ))}
+            {/* Page Numbers */}
+            {Array.from(
+              { length: totalPages },
+              (_, index) => index + 1
+            ).map((page) => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                disabled={loading}
+                onClick={() => setCurrentPage(page)}
+                className={`h-10 min-w-10 rounded-lg ${
+                  currentPage === page
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-blue-50"
+                }`}
+              >
+                {page}
+              </Button>
+            ))}
 
-    {/* Next */}
-    <Button
-      variant="outline"
-      disabled={currentPage === totalPages || loading}
-      onClick={() =>
-        setCurrentPage((page) => page + 1)
-      }
-      className="h-10 rounded-lg px-4"
-    >
-      Next
-    </Button>
+            {/* Next */}
+            <Button
+              variant="outline"
+              disabled={currentPage === totalPages || loading}
+              onClick={() =>
+                setCurrentPage((page) => page + 1)
+              }
+              className="h-10 rounded-lg px-4"
+            >
+              Next
+            </Button>
 
-  </div>
-)}
+          </div>
+        )}
 
       </div>
 
