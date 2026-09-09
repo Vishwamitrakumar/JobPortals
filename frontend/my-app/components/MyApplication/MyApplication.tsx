@@ -425,7 +425,7 @@ function MyApplicationsPanel() {
               </button>
 
               <span className="text-slate-400">
-                Page {page} of {totalPages} · {pageInfo.count} total
+                Page {page} of {totalPages} · {pageInfo.count} totals
               </span>
 
               <button
