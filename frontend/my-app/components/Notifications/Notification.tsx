@@ -18,6 +18,7 @@ import {
   MoreVertical,
   Filter,
   AlertTriangle,
+  LucideIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -32,10 +33,48 @@ const API = process.env.NEXT_PUBLIC_API;
 const PAGE_SIZE = 7;
 const POLL_INTERVAL_MS = 10000; // check for new notifications every 10s
 
+type CategoryKey = "all" | "applications" | "interviews" | "jobs" | "system";
+
+interface TypeMeta {
+  category: Exclude<CategoryKey, "all">;
+  icon: LucideIcon;
+  iconBg: string;
+  iconColor: string;
+}
+
+interface RawNotification {
+  id: string | number;
+  notification_type: string;
+  title: string;
+  message: string;
+  created_at: string;
+  is_read: boolean;
+}
+
+interface NormalizedNotification {
+  id: string | number;
+  category: Exclude<CategoryKey, "all">;
+  icon: LucideIcon;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  timeAgo: string;
+  unread: boolean;
+}
+
+interface DebugInfo {
+  url: string;
+  status: number | string;
+  hasToken: boolean;
+  rawResponse: unknown;
+}
+
 // ---------------------------------------------------------------------------
 // Map raw notification_type from the backend -> icon/category for the UI
 // ---------------------------------------------------------------------------
-const TYPE_META = {
+const TYPE_META: Record<string, TypeMeta> = {
   SYSTEM: {
     category: "system",
     icon: ShieldCheck,
@@ -86,14 +125,14 @@ const TYPE_META = {
   },
 };
 
-const DEFAULT_META = {
+const DEFAULT_META: TypeMeta = {
   category: "system",
   icon: ShieldCheck,
   iconBg: "bg-slate-100",
   iconColor: "text-slate-600",
 };
 
-const TABS = [
+const TABS: { key: CategoryKey; label: string }[] = [
   { key: "all", label: "All" },
   { key: "applications", label: "Applications" },
   { key: "interviews", label: "Interviews" },
@@ -101,7 +140,7 @@ const TABS = [
   { key: "system", label: "System" },
 ];
 
-function timeAgo(dateString) {
+function timeAgo(dateString: string): string {
   const diffMs = Date.now() - new Date(dateString).getTime();
   const sec = Math.floor(diffMs / 1000);
   if (sec < 60) return "just now";
@@ -113,7 +152,7 @@ function timeAgo(dateString) {
   return `${day} day${day > 1 ? "s" : ""} ago`;
 }
 
-function normalize(raw) {
+function normalize(raw: RawNotification): NormalizedNotification {
   const meta = TYPE_META[raw.notification_type] || DEFAULT_META;
   return {
     id: raw.id,
@@ -129,11 +168,11 @@ function normalize(raw) {
   };
 }
 
-function getToken() {
+function getToken(): string | null {
   return typeof window !== "undefined" ? localStorage.getItem("access") : null;
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const token = getToken();
   return {
     "Content-Type": "application/json",
@@ -142,15 +181,15 @@ function authHeaders() {
 }
 
 export default function Notification() {
-  const [activeTab, setActiveTab] = useState("all");
-  const [page, setPage] = useState(1);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [debugInfo, setDebugInfo] = useState(null); // { url, status, hasToken, rawResponse }
-  const knownIds = useRef(new Set());
+  const [activeTab, setActiveTab] = useState<CategoryKey>("all");
+  const [page, setPage] = useState<number>(1);
+  const [items, setItems] = useState<NormalizedNotification[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
+  const knownIds = useRef<Set<string | number>>(new Set());
 
-   const router = useRouter();
+  const router = useRouter();
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -164,61 +203,71 @@ export default function Notification() {
   // Fetch from the API. `silent` = true skips the loading spinner, used for
   // background polling so the list updates without a visible reload.
   // -------------------------------------------------------------------------
-  const fetchNotifications = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    setError(null);
+  const fetchNotifications = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      setError(null);
 
-    const url = `${API}/api/notifications/`;
-    const token = getToken();
+      const url = `${API}/api/notifications/`;
+      const token = getToken();
 
-    try {
-      const res = await fetch(url, { headers: authHeaders() });
-      const text = await res.text();
-      let data;
       try {
-        data = JSON.parse(text);
-      } catch {
-        data = text;
+        const res = await fetch(url, { headers: authHeaders() });
+        const text = await res.text();
+        let data: unknown;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = text;
+        }
+
+        setDebugInfo({
+          url,
+          status: res.status,
+          hasToken: !!token,
+          rawResponse: typeof data === "string" ? data.slice(0, 300) : data,
+        });
+
+        if (!res.ok) {
+          throw new Error(
+            res.status === 401
+              ? "401 Unauthorized — token missing/invalid/expired."
+              : `Request failed (${res.status})`
+          );
+        }
+
+        const list: RawNotification[] = Array.isArray(data)
+          ? (data as RawNotification[])
+          : ((data as { results?: RawNotification[] })?.results ?? []);
+        const normalized = list.map(normalize);
+
+        const newIds = new Set(normalized.map((n) => n.id));
+        const hasNew = [...newIds].some((id) => !knownIds.current.has(id));
+        knownIds.current = newIds;
+
+        if (!silent || hasNew || normalized.length !== items.length) {
+          setItems(
+            normalized.sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )
+          );
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(err);
+        setError(message);
+        setDebugInfo((prev) => ({
+          url,
+          status: prev?.status ?? "network error",
+          hasToken: !!token,
+          rawResponse: prev?.rawResponse ?? message,
+        }));
+      } finally {
+        if (!silent) setLoading(false);
       }
-
-      setDebugInfo({
-        url,
-        status: res.status,
-        hasToken: !!token,
-        rawResponse: typeof data === "string" ? data.slice(0, 300) : data,
-      });
-
-      if (!res.ok) {
-        throw new Error(
-          res.status === 401
-            ? "401 Unauthorized — token missing/invalid/expired."
-            : `Request failed (${res.status})`
-        );
-      }
-
-      const list = Array.isArray(data) ? data : data.results || [];
-      const normalized = list.map(normalize);
-
-      const newIds = new Set(normalized.map((n) => n.id));
-      const hasNew = [...newIds].some((id) => !knownIds.current.has(id));
-      knownIds.current = newIds;
-
-      if (!silent || hasNew || normalized.length !== items.length) {
-        setItems(normalized.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-      setDebugInfo((prev) => ({
-        url,
-        status: prev?.status ?? "network error",
-        hasToken: !!token,
-        rawResponse: prev?.rawResponse ?? String(err),
-      }));
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [items.length]);
+    },
+    [items.length]
+  );
 
   // Initial load
   useEffect(() => {
@@ -234,7 +283,13 @@ export default function Notification() {
   }, [fetchNotifications]);
 
   const counts = useMemo(() => {
-    const base = { all: items.length, applications: 0, interviews: 0, jobs: 0, system: 0 };
+    const base: Record<CategoryKey, number> = {
+      all: items.length,
+      applications: 0,
+      interviews: 0,
+      jobs: 0,
+      system: 0,
+    };
     for (const n of items) base[n.category] = (base[n.category] || 0) + 1;
     return base;
   }, [items]);
@@ -268,7 +323,7 @@ export default function Notification() {
     }
   };
 
-  const markOneAsRead = async (id) => {
+  const markOneAsRead = async (id: string | number) => {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, unread: false } : n)));
     try {
       const res = await fetch(`${API}/api/notifications/${id}/read/`, {
@@ -281,7 +336,7 @@ export default function Notification() {
     }
   };
 
-  const dismiss = async (id) => {
+  const dismiss = async (id: string | number) => {
     setItems((prev) => prev.filter((n) => n.id !== id));
     try {
       const res = await fetch(`${API}/api/notifications/${id}/`, {
@@ -294,8 +349,8 @@ export default function Notification() {
     }
   };
 
-  const handleTabChange = (value) => {
-    setActiveTab(value);
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as CategoryKey);
     setPage(1);
   };
 
@@ -376,7 +431,7 @@ export default function Notification() {
                     <span className="h-2 w-2 rounded-full bg-blue-600" aria-label="Unread" />
                   )}
                   <DropdownMenu>
-                    <DropdownMenuTrigger >
+                    <DropdownMenuTrigger>
                       <button className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
                         <MoreVertical className="h-4 w-4" />
                       </button>
