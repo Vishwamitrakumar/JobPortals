@@ -22,6 +22,7 @@ import {
   X,
   FileUp,
   Plus,
+  LucideIcon,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,60 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+
+/* --------------------------------------------------
+   TYPES
+-------------------------------------------------- */
+
+interface RawSuggestion {
+  type?: string;
+  title: string;
+  description: string;
+  impact?: string;
+}
+
+interface NormalizedSuggestion {
+  title: string;
+  description: string;
+  impact: string;
+  icon: LucideIcon;
+  impactClass: string;
+}
+
+interface ScoreBreakdownItem {
+  label: string;
+  score: number;
+}
+
+interface UploadedMeta {
+  name: string;
+  uploadedAt: string;
+  sizeKB: number;
+}
+
+interface GeneratedResume {
+  id: string | number;
+  name: string;
+  role: string;
+  date: string;
+  score: number;
+}
+
+interface RawGeneratedResume {
+  id: string | number;
+  name?: string;
+  file_name?: string;
+  role?: string;
+  target_role?: string;
+  date?: string;
+  created_at?: string;
+  ats_score?: number;
+  score?: number;
+}
+
+interface ApiFetchOptions extends RequestInit {
+  headers?: Record<string, string>;
+}
 
 /* --------------------------------------------------
    API CONFIG
@@ -40,15 +95,15 @@ import { Input } from "@/components/ui/input";
 const API_ROOT = process.env.NEXT_PUBLIC_API || "";
 const API_BASE = `${API_ROOT}/api`;
 
-function getToken() {
+function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("access");
 }
 
-async function apiFetch(path, options = {}) {
+async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
   const token = getToken();
 
-  const headers = {
+  const headers: Record<string, string> = {
     ...(options.headers || {}),
   };
 
@@ -84,26 +139,26 @@ async function apiFetch(path, options = {}) {
 }
 
 /* Map icons for suggestion "type"/"title" coming from backend, with a safe fallback */
-const SUGGESTION_ICON_MAP = {
+const SUGGESTION_ICON_MAP: Record<string, LucideIcon> = {
   keywords: Sparkles,
   experience: BriefcaseBusiness,
   skills: Code2,
   formatting: ClipboardList,
 };
 
-const SUGGESTION_IMPACT_CLASS = {
+const SUGGESTION_IMPACT_CLASS: Record<string, string> = {
   High: "bg-red-50 text-red-500",
   Medium: "bg-orange-50 text-orange-600",
   Low: "bg-green-50 text-green-600",
 };
 
-function normalizeSuggestion(item) {
+function normalizeSuggestion(item: RawSuggestion): NormalizedSuggestion {
   const impactKey = (item.impact || "Low").toString().split(" ")[0]; // "High Impact" -> "High"
   return {
     title: item.title,
     description: item.description,
     impact: item.impact?.includes("Impact") ? item.impact : `${item.impact} Impact`,
-    icon: SUGGESTION_ICON_MAP[item.type] || Sparkles,
+    icon: SUGGESTION_ICON_MAP[item.type ?? ""] || Sparkles,
     impactClass: SUGGESTION_IMPACT_CLASS[impactKey] || "bg-slate-50 text-slate-600",
   };
 }
@@ -112,7 +167,7 @@ function normalizeSuggestion(item) {
    SCORE CIRCLE
 -------------------------------------------------- */
 
-function ATSScore({ score = 0 }) {
+function ATSScore({ score = 0 }: { score?: number }) {
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
@@ -163,29 +218,29 @@ function ATSScore({ score = 0 }) {
 
 export default function Resume() {
   const router = useRouter();
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
 
-  const [resumeFile, setResumeFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [showBuilder, setShowBuilder] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const [showBuilder, setShowBuilder] = useState<boolean>(false);
+  const [generating, setGenerating] = useState<boolean>(false);
 
-  const [atsScore, setAtsScore] = useState(0);
-  const [scoreData, setScoreData] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
-  const [uploadedMeta, setUploadedMeta] = useState(null); // { name, uploadedAt, sizeKB }
+  const [atsScore, setAtsScore] = useState<number>(0);
+  const [scoreData, setScoreData] = useState<ScoreBreakdownItem[]>([]);
+  const [suggestions, setSuggestions] = useState<NormalizedSuggestion[]>([]);
+  const [uploadedMeta, setUploadedMeta] = useState<UploadedMeta | null>(null);
 
-  // 👇 NEW: stores the ID of the analyzed resume record returned by the backend.
+  // Stores the ID of the analyzed resume record returned by the backend.
   // This is what /resume/generate/ actually needs (resume_id), not the raw file again.
-  const [resumeId, setResumeId] = useState(null);
+  const [resumeId, setResumeId] = useState<string | number | null>(null);
 
-  const [generatedResumes, setGeneratedResumes] = useState([]);
-  const [loadingList, setLoadingList] = useState(false);
+  const [generatedResumes, setGeneratedResumes] = useState<GeneratedResume[]>([]);
+  const [loadingList, setLoadingList] = useState<boolean>(false);
 
-  const [targetRole, setTargetRole] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
+  const [targetRole, setTargetRole] = useState<string>("");
+  const [jobDescription, setJobDescription] = useState<string>("");
 
   /* ---------------- AUTH GUARD ---------------- */
   useEffect(() => {
@@ -203,10 +258,10 @@ export default function Resume() {
     try {
       const res = await apiFetch("/resume/generated/", { method: "GET" });
       const data = await res.json();
-      const list = Array.isArray(data) ? data : data.results || [];
+      const list: RawGeneratedResume[] = Array.isArray(data) ? data : data.results || [];
 
       setGeneratedResumes(
-        list.map((r) => ({
+        list.map((r): GeneratedResume => ({
           id: r.id,
           name: r.name || r.file_name || `Resume_${r.id}.pdf`,
           role: r.role || r.target_role || "-",
@@ -236,11 +291,11 @@ export default function Resume() {
   }, [authChecked, loadGeneratedResumes]);
 
   /* ---------------- UPLOAD + ANALYZE ---------------- */
-  const handleUploadClick = () => {
+  const handleUploadClick = (): void => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (event) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -265,10 +320,10 @@ export default function Resume() {
 
     try {
       const formData = new FormData();
-      // ⚠️ IMPORTANT: field name must match whatever your Django view
-      // reads via request.FILES.get(...). Your backend traceback showed
-      // "Resume file is required." coming from a check on this field,
-      // so make sure this matches your view exactly ("resume" vs "file").
+      // IMPORTANT: field name must match whatever your Django view
+      // reads via request.FILES.get(...). If you get
+      // "Resume file is required.", make sure this matches your view exactly
+      // ("resume" vs "file").
       formData.append("file", file);
 
       const res = await apiFetch("/resume/analyze/", {
@@ -287,9 +342,9 @@ export default function Resume() {
         }))
       );
 
-      setSuggestions((data.suggestions || []).map(normalizeSuggestion));
+      setSuggestions((data.suggestions || []).map((s: RawSuggestion) => normalizeSuggestion(s)));
 
-      // 👇 NEW: capture the resume record ID from the analyze response.
+      // Capture the resume record ID from the analyze response.
       // Check your Django serializer/response to confirm the exact key
       // (commonly "id" or "resume_id").
       setResumeId(data.id ?? data.resume_id ?? null);
@@ -311,13 +366,13 @@ export default function Resume() {
     }
   };
 
-  const removeFile = () => {
+  const removeFile = (): void => {
     setResumeFile(null);
     setUploadedMeta(null);
     setAtsScore(0);
     setScoreData([]);
     setSuggestions([]);
-    setResumeId(null); // 👈 NEW: reset so a stale ID can't be sent to /generate/
+    setResumeId(null); // reset so a stale ID can't be sent to /generate/
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -325,13 +380,13 @@ export default function Resume() {
   };
 
   /* ---------------- GENERATE RESUME ---------------- */
-  const handleGenerateResume = async () => {
+  const handleGenerateResume = async (): Promise<void> => {
     if (!targetRole || !jobDescription) {
       alert("Please fill target role and job description.");
       return;
     }
 
-    // 👇 NEW: /resume/generate/ needs a resume_id (an already analyzed resume),
+    // /resume/generate/ needs a resume_id (an already analyzed resume),
     // not a fresh file. If the user hasn't analyzed a resume yet, stop here
     // instead of sending an incomplete request that the backend will reject.
     if (!resumeId) {
@@ -344,8 +399,8 @@ export default function Resume() {
       const formData = new FormData();
       formData.append("target_role", targetRole);
       formData.append("job_description", jobDescription);
-      // 👇 FIX: send the resume_id instead of re-uploading the file.
-      formData.append("resume_id", resumeId);
+      // send the resume_id instead of re-uploading the file.
+      formData.append("resume_id", String(resumeId));
 
       await apiFetch("/resume/generate/", {
         method: "POST",
@@ -367,7 +422,7 @@ export default function Resume() {
   };
 
   /* ---------------- VIEW / DOWNLOAD ---------------- */
-  const handleView = async (id) => {
+  const handleView = async (id: string | number): Promise<void> => {
     try {
       const res = await apiFetch(`/resume/generated/${id}/`, { method: "GET" });
       const data = await res.json();
@@ -379,7 +434,7 @@ export default function Resume() {
     }
   };
 
-  const handleDownload = async (id, name) => {
+  const handleDownload = async (id: string | number, name?: string): Promise<void> => {
     try {
       const res = await apiFetch(`/resume/generated/${id}/download/`, {
         method: "GET",
@@ -957,7 +1012,7 @@ export default function Resume() {
 
             <CardContent className="space-y-5">
 
-              {/* 👇 NEW: warn the user inline if they haven't analyzed a resume yet,
+              {/* Warn the user inline if they haven't analyzed a resume yet,
                   since /resume/generate/ requires resumeId */}
               {!resumeId && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
@@ -1044,12 +1099,19 @@ export default function Resume() {
    BUILDER STEP
 -------------------------------------------------- */
 
+interface BuilderStepProps {
+  number: string;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}
+
 function BuilderStep({
   number,
   icon: Icon,
   title,
   description,
-}) {
+}: BuilderStepProps) {
   return (
     <div className="flex gap-3">
 
@@ -1075,7 +1137,12 @@ function BuilderStep({
    PREVIEW SECTION
 -------------------------------------------------- */
 
-function PreviewSection({ title, text }) {
+interface PreviewSectionProps {
+  title: string;
+  text: string;
+}
+
+function PreviewSection({ title, text }: PreviewSectionProps) {
   return (
     <div>
       <h4 className="mb-1 border-b pb-1 text-[8px] font-bold text-slate-700">
