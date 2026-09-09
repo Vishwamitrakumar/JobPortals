@@ -24,7 +24,7 @@ const LIST_URL = `${API_BASE}/api/my-applications/`;
 const STATUS_OPTIONS = ["All Status", "Pending", "Shortlisted", "Rejected", "Selected"];
 
 // Tailwind classes per status value coming from the API (lowercase-safe lookup below)
-const statusStyles = {
+const statusStyles: Record<string, string> = {
   interview: "bg-violet-100 text-violet-600",
   shortlisted: "bg-emerald-100 text-emerald-600",
   pending: "bg-blue-100 text-blue-600",
@@ -32,15 +32,15 @@ const statusStyles = {
   selected: "bg-teal-100 text-teal-600",
 };
 
-function getStatusStyle(status) {
+function getStatusStyle(status?: string): string {
   return statusStyles[(status || "").toLowerCase()] || "bg-slate-100 text-slate-600";
 }
 
-function getInitial(name) {
+function getInitial(name?: string): string {
   return (name || "?").trim().charAt(0).toUpperCase();
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr?: string): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return dateStr;
@@ -49,6 +49,29 @@ function formatDate(dateStr) {
     day: "2-digit",
     year: "numeric",
   })}`;
+}
+
+interface Application {
+  id: string | number;
+  full_name?: string;
+  email?: string;
+  current_company?: string;
+  status?: string;
+  created_at?: string;
+}
+
+interface PageInfo {
+  count: number;
+  next: string | null;
+  previous: string | null;
+}
+
+interface ApplicationsResponse {
+  success?: boolean;
+  count?: number;
+  next?: string | null;
+  previous?: string | null;
+  applications?: Application[];
 }
 
 export default function MyApplication() {
@@ -154,23 +177,27 @@ function PersonIllustration() {
 /* ------------------------------------------------------------------ */
 
 function MyApplicationsPanel() {
-  const [statusFilter, setStatusFilter] = useState("All Status");
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const [statusFilter, setStatusFilter] = useState<string>("All Status");
+  const [open, setOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [query, setQuery] = useState("");
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [query, setQuery] = useState<string>("");
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [page, setPage] = useState(1);
-  const [pageInfo, setPageInfo] = useState({ count: 0, next: null, previous: null });
+  const [page, setPage] = useState<number>(1);
+  const [pageInfo, setPageInfo] = useState<PageInfo>({ count: 0, next: null, previous: null });
   const pageSize = 5;
 
   // close status dropdown on outside click
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        e.target instanceof Node &&
+        !dropdownRef.current.contains(e.target)
+      ) {
         setOpen(false);
       }
     }
@@ -181,58 +208,67 @@ function MyApplicationsPanel() {
   // MyApplicationsAPIView now supports server-side pagination, status
   // filtering (?status=) and search (?search=) on top of always scoping
   // results to the logged-in user.
-  const fetchApplications = useCallback(async (signal, pageNum, status, search) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token =
-        typeof window !== "undefined" ? localStorage.getItem("access") : null;
+  const fetchApplications = useCallback(
+    async (signal: AbortSignal, pageNum: number, status: string, search: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token =
+          typeof window !== "undefined" ? localStorage.getItem("access") : null;
 
-      if (!token) {
-        throw new Error("You're not logged in. Please log in to view your applications.");
+        if (!token) {
+          throw new Error("You're not logged in. Please log in to view your applications.");
+        }
+
+        const params = new URLSearchParams();
+        params.set("page", String(pageNum));
+        params.set("page_size", String(pageSize));
+        if (status && status !== "All Status") params.set("status", status);
+        if (search) params.set("search", search);
+
+        const res = await fetch(`${LIST_URL}?${params.toString()}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          signal,
+        });
+
+        if (res.status === 401) {
+          throw new Error("Your session has expired. Please log in again.");
+        }
+
+        if (!res.ok) {
+          throw new Error(`Request failed with status ${res.status}`);
+        }
+
+        const data: ApplicationsResponse = await res.json();
+        // backend returns { success, count, next, previous, applications: [...] }
+        setApplications(Array.isArray(data.applications) ? data.applications : []);
+        setPageInfo({
+          count: data.count ?? 0,
+          next: data.next ?? null,
+          previous: data.previous ?? null,
+        });
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          if (err.name !== "AbortError") {
+            setError(err.message || "Something went wrong while loading applications.");
+            setApplications([]);
+            setPageInfo({ count: 0, next: null, previous: null });
+          }
+        } else {
+          setError("Something went wrong while loading applications.");
+          setApplications([]);
+          setPageInfo({ count: 0, next: null, previous: null });
+        }
+      } finally {
+        setLoading(false);
       }
-
-      const params = new URLSearchParams();
-      params.set("page", pageNum);
-      params.set("page_size", pageSize);
-      if (status && status !== "All Status") params.set("status", status);
-      if (search) params.set("search", search);
-
-      const res = await fetch(`${LIST_URL}?${params.toString()}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        signal,
-      });
-
-      if (res.status === 401) {
-        throw new Error("Your session has expired. Please log in again.");
-      }
-
-      if (!res.ok) {
-        throw new Error(`Request failed with status ${res.status}`);
-      }
-
-      const data = await res.json();
-      // backend returns { success, count, next, previous, applications: [...] }
-      setApplications(Array.isArray(data.applications) ? data.applications : []);
-      setPageInfo({
-        count: data.count ?? 0,
-        next: data.next ?? null,
-        previous: data.previous ?? null,
-      });
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        setError(err.message || "Something went wrong while loading applications.");
-        setApplications([]);
-        setPageInfo({ count: 0, next: null, previous: null });
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   // When search or status changes: debounce, reset to page 1, refetch.
   useEffect(() => {
