@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,13 @@ import {
   Sparkles,
   CheckCircle2,
   Circle,
+  User,
+  BookOpen,
+  Wrench,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  Check,
 } from "lucide-react";
 
 interface ProfileFormData {
@@ -200,6 +207,20 @@ function extractProfileObject(parsed: unknown): Record<string, unknown> | null {
   return obj;
 }
 
+// ---- Step wizard configuration ----
+// Steps are derived at render time (not hardcoded) because the "Work
+// Experience" step only exists once Current Salary (an Additional
+// Information field) has a value — same conditional logic the form already
+// had, just expressed as a step instead of an inline card.
+type StepId = "personal" | "education" | "skills" | "additional" | "experience";
+
+interface StepDef {
+  id: StepId;
+  label: string;
+  shortLabel: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
 export default function MyProfile() {
   const [formData, setFormData] = useState<ProfileFormData>(initialFormData);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -222,6 +243,41 @@ export default function MyProfile() {
   // automatically only while "Current Salary" (Additional Information) has
   // a value, and hides again the moment that field is cleared.
   const showWorkExperience = Boolean(formData.currentSalary.trim());
+
+  // ---- Step wizard state ----
+  const steps: StepDef[] = useMemo(() => {
+    const base: StepDef[] = [
+      { id: "personal", label: "Personal Information", shortLabel: "Personal", icon: User },
+      { id: "education", label: "Education", shortLabel: "Education", icon: GraduationCap },
+      { id: "skills", label: "Skills", shortLabel: "Skills", icon: Wrench },
+      { id: "additional", label: "Additional Information", shortLabel: "Additional", icon: FileText },
+    ];
+    if (showWorkExperience) {
+      base.push({ id: "experience", label: "Work Experience", shortLabel: "Experience", icon: Briefcase });
+    }
+    return base;
+  }, [showWorkExperience]);
+
+  const [currentStep, setCurrentStep] = useState(0);
+
+  // If the steps array shrinks (e.g. Current Salary gets cleared while the
+  // user is sitting on the Work Experience step), keep currentStep in
+  // bounds instead of pointing at a step that no longer exists.
+  useEffect(() => {
+    if (currentStep > steps.length - 1) {
+      setCurrentStep(steps.length - 1);
+    }
+  }, [steps.length, currentStep]);
+
+  const isFirstStep = currentStep === 0;
+  const isLastStep = currentStep === steps.length - 1;
+  const activeStepId = steps[currentStep]?.id ?? "personal";
+
+  const goToStep = (index: number) => {
+    if (index >= 0 && index < steps.length) {
+      setCurrentStep(index);
+    }
+  };
 
   const updateField = <K extends keyof ProfileFormData>(
     field: K,
@@ -255,6 +311,7 @@ export default function MyProfile() {
     setAvatarUrl(null);
     setSelectedFile(null);
     setShowEducation(false);
+    setCurrentStep(0);
   };
 
   // Only the truly-required fields are checked before saving.
@@ -458,6 +515,10 @@ export default function MyProfile() {
         "Missing Information",
         `Please fill: ${emptyFields.join(", ")}`
       );
+      // Required fields all live on the Personal Information step, so jump
+      // the user back there instead of leaving them stuck on whatever step
+      // they were on when the save failed.
+      goToStep(0);
       return;
     }
 
@@ -616,6 +677,375 @@ export default function MyProfile() {
     { key: "skills", label: "Skills" },
   ];
 
+  // ---- Step content renderers ----
+  // Each function returns just the fields for that step; the surrounding
+  // Card + heading + step nav is handled once, below, so every step looks
+  // consistent.
+
+  const renderPersonalStep = () => (
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr]">
+      {/* Avatar upload */}
+      <div className="flex flex-col items-center gap-2 md:w-40">
+        <div className="relative">
+          <Avatar className="h-28 w-28 border">
+            <AvatarImage src={avatarUrl ?? undefined} alt="Profile picture" />
+            <AvatarFallback className="text-3xl font-medium">
+              {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : "?"}
+            </AvatarFallback>
+          </Avatar>
+          <label
+            htmlFor="avatar-upload"
+            className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border bg-background text-primary shadow-sm hover:bg-muted"
+          >
+            <Camera className="h-4 w-4 " />
+            <input
+              id="avatar-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/gif"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
+          </label>
+        </div>
+        <p className="text-center text-sm font-medium">Upload Profile Picture</p>
+        <p className="text-center text-xs text-muted-foreground">
+          JPG, PNG or GIF. Max size 2MB.
+        </p>
+      </div>
+
+      {/* Fields */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <RequiredLabel htmlFor="fullName">Full Name</RequiredLabel>
+          <Input
+            id="fullName"
+            value={formData.fullName}
+            onChange={(e) => updateField("fullName", e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <RequiredLabel htmlFor="email">Email Address</RequiredLabel>
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => updateField("email", e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <RequiredLabel htmlFor="phone">Phone Number</RequiredLabel>
+          <Input
+            id="phone"
+            value={formData.phone}
+            onChange={(e) => updateField("phone", e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <RequiredLabel htmlFor="location">Location</RequiredLabel>
+          <Input
+            id="location"
+            value={formData.location}
+            onChange={(e) => updateField("location", e.target.value)}
+          />
+        </div>
+
+        {/* Optional — no red asterisk */}
+        <div className="space-y-1.5">
+          <Label htmlFor="jobTitle">Current Job Title</Label>
+          <Input
+            id="jobTitle"
+            placeholder="e.g. Software Engineer"
+            value={formData.jobTitle}
+            onChange={(e) => updateField("jobTitle", e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="experience">Experience (Years)</Label>
+          <Select
+            value={formData.experience || ""}
+            onValueChange={(value) => updateField("experience", value ?? "")}
+          >
+            <SelectTrigger id="experience">
+              <SelectValue placeholder="Select experience" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0-1">0 - 1 years</SelectItem>
+              <SelectItem value="1-3">1 - 3 years</SelectItem>
+              <SelectItem value="3-5">3 - 5 years</SelectItem>
+              <SelectItem value="5-10">5 - 10 years</SelectItem>
+              <SelectItem value="10+">10+ years</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="about">About Me</Label>
+          <textarea
+            id="about"
+            maxLength={500}
+            value={formData.about}
+            onChange={(e) => updateField("about", e.target.value)}
+            placeholder="Write a short summary about yourself, your experience and skills..."
+            className="min-h-[100px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <p className="text-right text-xs text-muted-foreground">
+            {formData.about.length}/500
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderEducationStep = () => (
+    <div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="toggleEducation"
+          checked={showEducation}
+          onCheckedChange={(checked) => setShowEducation(checked === true)}
+        />
+        <Label htmlFor="toggleEducation" className="cursor-pointer text-sm font-medium">
+          Add education details
+        </Label>
+      </div>
+
+      {showEducation && (
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="degree">Degree</Label>
+            <Input
+              id="degree"
+              placeholder="e.g. B.Tech"
+              value={formData.degree}
+              onChange={(e) => updateField("degree", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="institution">Institution</Label>
+            <Input
+              id="institution"
+              placeholder="e.g. IIT Jaipur"
+              value={formData.institution}
+              onChange={(e) => updateField("institution", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="fieldOfStudy">Field of Study</Label>
+            <Input
+              id="fieldOfStudy"
+              placeholder="e.g. Computer Science"
+              value={formData.fieldOfStudy}
+              onChange={(e) => updateField("fieldOfStudy", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="graduationYear">Graduation Year</Label>
+            <Input
+              id="graduationYear"
+              type="number"
+              placeholder="e.g. 2023"
+              value={formData.graduationYear}
+              onChange={(e) => updateField("graduationYear", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cgpa">CGPA</Label>
+            <Input
+              id="cgpa"
+              placeholder="e.g. 8.5"
+              value={formData.cgpa}
+              onChange={(e) => updateField("cgpa", e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderSkillsStep = () => (
+    <div className="space-y-1.5">
+      <Label htmlFor="skills">Skills</Label>
+      <textarea
+        id="skills"
+        value={formData.skills}
+        onChange={(e) => updateField("skills", e.target.value)}
+        placeholder="e.g. Python, Django, React, SQL (comma separated)"
+        className="min-h-[120px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+    </div>
+  );
+
+  const renderAdditionalStep = () => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="dob">Date of Birth</Label>
+        <div className="relative">
+          <Input
+            id="dob"
+            type="date"
+            className="pr-8"
+            value={formData.dob}
+            onChange={(e) => updateField("dob", e.target.value)}
+          />
+          <Calendar className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="gender">Gender</Label>
+        <Select
+          value={formData.gender || ""}
+          onValueChange={(value) => updateField("gender", value ?? "")}
+        >
+          <SelectTrigger id="gender">
+            <SelectValue placeholder="Select gender" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Male">Male</SelectItem>
+            <SelectItem value="Female">Female</SelectItem>
+            <SelectItem value="Other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="linkedin">LinkedIn Profile</Label>
+        <Input
+          id="linkedin"
+          placeholder="https://linkedin.com/in/yourprofile"
+          value={formData.linkedin}
+          onChange={(e) => updateField("linkedin", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="portfolio">Portfolio / Website</Label>
+        <Input
+          id="portfolio"
+          placeholder="https://yourwebsite.com"
+          value={formData.portfolio}
+          onChange={(e) => updateField("portfolio", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="github">GitHub Profile</Label>
+        <Input
+          id="github"
+          placeholder="https://github.com/username"
+          value={formData.github}
+          onChange={(e) => updateField("github", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="currentSalary">Current Salary (Annual)</Label>
+        <Input
+          id="currentSalary"
+          type="number"
+          placeholder="e.g. 600000"
+          value={formData.currentSalary}
+          onChange={(e) => updateField("currentSalary", e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">
+          Add this to unlock the Work Experience step.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="expectedSalary">Expected Salary (Annual)</Label>
+        <Input
+          id="expectedSalary"
+          type="number"
+          placeholder="e.g. 800000"
+          value={formData.expectedSalary}
+          onChange={(e) => updateField("expectedSalary", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="noticePeriod">Notice Period</Label>
+        <Select
+          value={formData.noticePeriod || ""}
+          onValueChange={(value) => updateField("noticePeriod", value ?? "")}
+        >
+          <SelectTrigger id="noticePeriod">
+            <SelectValue placeholder="Select notice period" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="immediate">Immediate</SelectItem>
+            <SelectItem value="15">15 days</SelectItem>
+            <SelectItem value="30">30 days</SelectItem>
+            <SelectItem value="60">60 days</SelectItem>
+            <SelectItem value="90">90 days</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+
+  const renderExperienceStep = () => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="space-y-1.5">
+        <Label htmlFor="experienceCompany">Company</Label>
+        <Input
+          id="experienceCompany"
+          placeholder="e.g. Acme Corp"
+          value={formData.experienceCompany}
+          onChange={(e) => updateField("experienceCompany", e.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="experienceRole">Role / Title</Label>
+        <Input
+          id="experienceRole"
+          placeholder="e.g. Backend Developer"
+          value={formData.experienceRole}
+          onChange={(e) => updateField("experienceRole", e.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="experienceStartDate">Start Date</Label>
+        <Input
+          id="experienceStartDate"
+          type="date"
+          value={formData.experienceStartDate}
+          onChange={(e) => updateField("experienceStartDate", e.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="experienceEndDate">End Date</Label>
+        <Input
+          id="experienceEndDate"
+          type="date"
+          value={formData.experienceEndDate}
+          onChange={(e) => updateField("experienceEndDate", e.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5 sm:col-span-2">
+        <Label htmlFor="experienceDescription">Description</Label>
+        <textarea
+          id="experienceDescription"
+          value={formData.experienceDescription}
+          onChange={(e) => updateField("experienceDescription", e.target.value)}
+          placeholder="What did you work on in this role?"
+          className="min-h-[80px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </div>
+    </div>
+  );
+
+  const stepRenderers: Record<StepId, () => React.ReactNode> = {
+    personal: renderPersonalStep,
+    education: renderEducationStep,
+    skills: renderSkillsStep,
+    additional: renderAdditionalStep,
+    experience: renderExperienceStep,
+  };
+
+  const activeStepDef = steps[currentStep];
+
   return (
     <div className="min-h-screen bg-muted/30 p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -670,375 +1100,95 @@ export default function MyProfile() {
           </div>
         </Card>
 
-        {/* Personal Information */}
+        {/* Step navigation */}
         <Card className="p-4 sm:p-6">
-          <h2 className="mb-4 text-sm font-semibold">Personal Information</h2>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_1fr]">
-            {/* Avatar upload */}
-            <div className="flex flex-col items-center gap-2 md:w-40">
-              <div className="relative">
-                <Avatar className="h-28 w-28 border">
-                  <AvatarImage src={avatarUrl ?? undefined} alt="Profile picture" />
-                  <AvatarFallback className="text-3xl font-medium">
-                    {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : "?"}
-                  </AvatarFallback>
-                </Avatar>
-                <label
-                  htmlFor="avatar-upload"
-                  className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border bg-background text-primary shadow-sm hover:bg-muted"
-                >
-                  <Camera className="h-4 w-4 " />
-                  <input
-                    id="avatar-upload"
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif"
-                    className="hidden"
-                    onChange={handleAvatarChange}
-                  />
-                </label>
-              </div>
-              <p className="text-center text-sm font-medium">Upload Profile Picture</p>
-              <p className="text-center text-xs text-muted-foreground">
-                JPG, PNG or GIF. Max size 2MB.
-              </p>
-            </div>
-
-            {/* Fields */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <RequiredLabel htmlFor="fullName">Full Name</RequiredLabel>
-                <Input
-                  id="fullName"
-                  value={formData.fullName}
-                  onChange={(e) => updateField("fullName", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <RequiredLabel htmlFor="email">Email Address</RequiredLabel>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => updateField("email", e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <RequiredLabel htmlFor="phone">Phone Number</RequiredLabel>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => updateField("phone", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <RequiredLabel htmlFor="location">Location</RequiredLabel>
-                <Input
-                  id="location"
-                  value={formData.location}
-                  onChange={(e) => updateField("location", e.target.value)}
-                />
-              </div>
-
-              {/* Optional — no red asterisk */}
-              <div className="space-y-1.5">
-                <Label htmlFor="jobTitle">Current Job Title</Label>
-                <Input
-                  id="jobTitle"
-                  placeholder="e.g. Software Engineer"
-                  value={formData.jobTitle}
-                  onChange={(e) => updateField("jobTitle", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="experience">Experience (Years)</Label>
-                <Select
-                  value={formData.experience || ""}
-                  onValueChange={(value) => updateField("experience", value ?? "")}
-                >
-                  <SelectTrigger id="experience">
-                    <SelectValue placeholder="Select experience" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0-1">0 - 1 years</SelectItem>
-                    <SelectItem value="1-3">1 - 3 years</SelectItem>
-                    <SelectItem value="3-5">3 - 5 years</SelectItem>
-                    <SelectItem value="5-10">5 - 10 years</SelectItem>
-                    <SelectItem value="10+">10+ years</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="about">About Me</Label>
-                <textarea
-                  id="about"
-                  maxLength={500}
-                  value={formData.about}
-                  onChange={(e) => updateField("about", e.target.value)}
-                  placeholder="Write a short summary about yourself, your experience and skills..."
-                  className="min-h-[100px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                />
-                <p className="text-right text-xs text-muted-foreground">
-                  {formData.about.length}/500
-                </p>
-              </div>
-            </div>
-          </div>
+          <ol className="flex flex-wrap items-center gap-y-4">
+            {steps.map((step, index) => {
+              const StepIcon = step.icon;
+              const isDone = index < currentStep;
+              const isActive = index === currentStep;
+              return (
+                <li key={step.id} className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => goToStep(index)}
+                    className="flex items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted"
+                  >
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-medium transition-colors ${
+                        isActive
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : isDone
+                            ? "border-emerald-500 bg-emerald-500 text-white"
+                            : "border-muted-foreground/30 bg-background text-muted-foreground"
+                      }`}
+                    >
+                      {isDone ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
+                    </span>
+                    <span
+                      className={`hidden text-sm sm:inline ${
+                        isActive ? "font-medium text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      {step.shortLabel}
+                    </span>
+                  </button>
+                  {index < steps.length - 1 && (
+                    <span className="mx-1 h-px w-6 shrink-0 bg-border sm:w-10" />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
         </Card>
 
-        {/* Education — collapsed until the checkbox is checked */}
+        {/* Active step content */}
         <Card className="p-4 sm:p-6">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="toggleEducation"
-              checked={showEducation}
-              onCheckedChange={(checked) => setShowEducation(checked === true)}
-            />
-            <GraduationCap className="h-4 w-4 text-blue-600" />
-            <Label htmlFor="toggleEducation" className="cursor-pointer text-sm font-semibold">
-              Add Education
-            </Label>
+          <div className="mb-4 flex items-center gap-2">
+            {activeStepDef && <activeStepDef.icon className="h-4 w-4 text-blue-600" />}
+            <h2 className="text-sm font-semibold">{activeStepDef?.label}</h2>
+            <span className="ml-auto text-xs text-muted-foreground">
+              Step {currentStep + 1} of {steps.length}
+            </span>
           </div>
 
-          {showEducation && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="degree">Degree</Label>
-                <Input
-                  id="degree"
-                  placeholder="e.g. B.Tech"
-                  value={formData.degree}
-                  onChange={(e) => updateField("degree", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="institution">Institution</Label>
-                <Input
-                  id="institution"
-                  placeholder="e.g. IIT Jaipur"
-                  value={formData.institution}
-                  onChange={(e) => updateField("institution", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="fieldOfStudy">Field of Study</Label>
-                <Input
-                  id="fieldOfStudy"
-                  placeholder="e.g. Computer Science"
-                  value={formData.fieldOfStudy}
-                  onChange={(e) => updateField("fieldOfStudy", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="graduationYear">Graduation Year</Label>
-                <Input
-                  id="graduationYear"
-                  type="number"
-                  placeholder="e.g. 2023"
-                  value={formData.graduationYear}
-                  onChange={(e) => updateField("graduationYear", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cgpa">CGPA</Label>
-                <Input
-                  id="cgpa"
-                  placeholder="e.g. 8.5"
-                  value={formData.cgpa}
-                  onChange={(e) => updateField("cgpa", e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-        </Card>
+          {stepRenderers[activeStepId]()}
 
-        {/* Skills — optional */}
-        <Card className="p-4 sm:p-6">
-          <h2 className="mb-4 text-sm font-semibold">Skills</h2>
-          <div className="space-y-1.5">
-            <Label htmlFor="skills">Skills</Label>
-            <textarea
-              id="skills"
-              value={formData.skills}
-              onChange={(e) => updateField("skills", e.target.value)}
-              placeholder="e.g. Python, Django, React, SQL (comma separated)"
-              className="min-h-[80px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-          </div>
-        </Card>
+          {/* Step navigation controls */}
+          <div className="mt-6 flex items-center justify-between border-t pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => goToStep(currentStep - 1)}
+              disabled={isFirstStep}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </Button>
 
-        {/* Additional Information — all optional */}
-        <Card className="p-4 sm:p-6">
-          <h2 className="mb-4 text-sm font-semibold">Additional Information</h2>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="dob">Date of Birth</Label>
-              <div className="relative">
-                <Input
-                  id="dob"
-                  type="date"
-                  className="pr-8"
-                  value={formData.dob}
-                  onChange={(e) => updateField("dob", e.target.value)}
-                />
-                <Calendar className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="gender">Gender</Label>
-              <Select
-                value={formData.gender || ""}
-                onValueChange={(value) => updateField("gender", value ?? "")}
+            {isLastStep ? (
+              <Button
+                type="button"
+                className="gap-2 bg-blue-600 text-white shadow-md shadow-blue-600/20 transition-colors hover:bg-blue-700 focus-visible:ring-blue-600 disabled:opacity-70"
+                onClick={handleSave}
+                disabled={isSaving}
               >
-                <SelectTrigger id="gender">
-                  <SelectValue placeholder="Select gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Male">Male</SelectItem>
-                  <SelectItem value="Female">Female</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="linkedin">LinkedIn Profile</Label>
-              <Input
-                id="linkedin"
-                placeholder="https://linkedin.com/in/yourprofile"
-                value={formData.linkedin}
-                onChange={(e) => updateField("linkedin", e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="portfolio">Portfolio / Website</Label>
-              <Input
-                id="portfolio"
-                placeholder="https://yourwebsite.com"
-                value={formData.portfolio}
-                onChange={(e) => updateField("portfolio", e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="github">GitHub Profile</Label>
-              <Input
-                id="github"
-                placeholder="https://github.com/username"
-                value={formData.github}
-                onChange={(e) => updateField("github", e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="currentSalary">Current Salary (Annual)</Label>
-              <Input
-                id="currentSalary"
-                type="number"
-                placeholder="e.g. 600000"
-                value={formData.currentSalary}
-                onChange={(e) => updateField("currentSalary", e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="expectedSalary">Expected Salary (Annual)</Label>
-              <Input
-                id="expectedSalary"
-                type="number"
-                placeholder="e.g. 800000"
-                value={formData.expectedSalary}
-                onChange={(e) => updateField("expectedSalary", e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="noticePeriod">Notice Period</Label>
-              <Select
-                value={formData.noticePeriod || ""}
-                onValueChange={(value) => updateField("noticePeriod", value ?? "")}
+                <Save className="h-4 w-4" />
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="gap-2 bg-blue-600 text-white shadow-md shadow-blue-600/20 transition-colors hover:bg-blue-700 focus-visible:ring-blue-600"
+                onClick={() => goToStep(currentStep + 1)}
               >
-                <SelectTrigger id="noticePeriod">
-                  <SelectValue placeholder="Select notice period" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="immediate">Immediate</SelectItem>
-                  <SelectItem value="15">15 days</SelectItem>
-                  <SelectItem value="30">30 days</SelectItem>
-                  <SelectItem value="60">60 days</SelectItem>
-                  <SelectItem value="90">90 days</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </Card>
-
-
-        {showWorkExperience && (
-          <Card className="p-4 sm:p-6">
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-4 w-4 text-blue-600" />
-              <Label className="text-sm font-semibold">
-                Add Work Experience
-              </Label>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="experienceCompany">Company</Label>
-                <Input
-                  id="experienceCompany"
-                  placeholder="e.g. Acme Corp"
-                  value={formData.experienceCompany}
-                  onChange={(e) => updateField("experienceCompany", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="experienceRole">Role / Title</Label>
-                <Input
-                  id="experienceRole"
-                  placeholder="e.g. Backend Developer"
-                  value={formData.experienceRole}
-                  onChange={(e) => updateField("experienceRole", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="experienceStartDate">Start Date</Label>
-                <Input
-                  id="experienceStartDate"
-                  type="date"
-                  value={formData.experienceStartDate}
-                  onChange={(e) => updateField("experienceStartDate", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="experienceEndDate">End Date</Label>
-                <Input
-                  id="experienceEndDate"
-                  type="date"
-                  value={formData.experienceEndDate}
-                  onChange={(e) => updateField("experienceEndDate", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="experienceDescription">Description</Label>
-                <textarea
-                  id="experienceDescription"
-                  value={formData.experienceDescription}
-                  onChange={(e) => updateField("experienceDescription", e.target.value)}
-                  placeholder="What did you work on in this role?"
-                  className="min-h-[80px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                />
-              </div>
-            </div>
-          </Card>
-        )}
-
 
         {/* Actions */}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
