@@ -27,7 +27,7 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
-    "https://jobportals-4phj.onrender.com",
+    "jobportals-4phj.onrender.com",
 ]
 
 
