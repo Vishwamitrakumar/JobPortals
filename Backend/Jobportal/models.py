@@ -129,17 +129,113 @@ class Profile(models.Model):
         related_name="profile"
     )
 
+    # =========================
+    # Personal Information
+    # =========================
+
     full_name = models.CharField(max_length=150)
     email = models.EmailField()
     phone = models.CharField(max_length=20)
     location = models.CharField(max_length=200)
 
-    job_title = models.CharField(max_length=150, blank=True, null=True)
-    experience = models.CharField(max_length=100, blank=True, null=True)
+    job_title = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True
+    )
 
-    about = models.TextField(blank=True, null=True)
+    experience = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
 
-    dob = models.DateField(blank=True, null=True)
+    about = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    # =========================
+    # Work Experience
+    # =========================
+
+    experience_company = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True
+    )
+
+    experience_role = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True
+    )
+
+    experience_start_date = models.DateField(
+        blank=True,
+        null=True
+    )
+
+    experience_end_date = models.DateField(
+        blank=True,
+        null=True
+    )
+
+    experience_description = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    # =========================
+    # Education
+    # =========================
+
+    degree = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True
+    )
+
+    institution = models.CharField(
+        max_length=250,
+        blank=True,
+        null=True
+    )
+
+    field_of_study = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True
+    )
+
+    graduation_year = models.IntegerField(
+        blank=True,
+        null=True
+    )
+
+    cgpa = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    # =========================
+    # Skills
+    # =========================
+
+    skills = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    # =========================
+    # Additional Information
+    # =========================
+
+    dob = models.DateField(
+        blank=True,
+        null=True
+    )
 
     GENDER_CHOICES = (
         ("Male", "Male"),
@@ -154,9 +250,20 @@ class Profile(models.Model):
         null=True
     )
 
-    linkedin = models.URLField(blank=True, null=True)
-    portfolio = models.URLField(blank=True, null=True)
-    github = models.URLField(blank=True, null=True)
+    linkedin = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    portfolio = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    github = models.URLField(
+        blank=True,
+        null=True
+    )
 
     current_salary = models.DecimalField(
         max_digits=12,
@@ -172,7 +279,11 @@ class Profile(models.Model):
         null=True
     )
 
-    notice_period = models.CharField(max_length=100, blank=True, null=True)
+    notice_period = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
 
     profile_image = models.ImageField(
         upload_to="profiles/",
@@ -180,13 +291,16 @@ class Profile(models.Model):
         null=True
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
 
     class Meta:
         db_table = "myprofile"
 
     def __str__(self):
         return self.full_name
-
-        

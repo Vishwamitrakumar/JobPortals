@@ -1,4 +1,4 @@
-import SavedList from "@/components/SavedList/SavedList";
+import SavedList from "@/components/Saved_Job/SavedList";
 
 export default function SavedListt() {
   return (

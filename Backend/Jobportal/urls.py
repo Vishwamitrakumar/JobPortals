@@ -12,6 +12,9 @@ from .views import (
     ProfileAPIView,
     ApplyFormListAPIView,
     ApplicationStatusUpdateAPIView,
+    DeleteAccountAPIView,
+    ChangePasswordAPIView,
+    GoogleLoginAPIView,
 )
 
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -19,7 +22,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .export_views import ExportApplicationExcelAPIView
 from .view.user_application_views import MyApplicationsAPIView
 from .view.notifications import NotificationViewSet
-
+from .view.DashboardStatsAPIView import DashboardStatsAPIView
 from .view.resume import (
     ResumeAnalyzeView,
     ResumeGenerateView,
@@ -68,6 +71,24 @@ urlpatterns = [
         "login/",
         LoginView.as_view(),
         name="login"
+    ),
+
+    path(
+        "google-login/",
+        GoogleLoginAPIView.as_view(),
+        name="google-login"
+    ),
+
+    path(
+        "change-password/",
+        ChangePasswordAPIView.as_view(),
+        name="change-password"
+    ),
+
+    path(
+        "delete-account/",
+        DeleteAccountAPIView.as_view(),
+        name="delete-account"
     ),
 
     path(
@@ -245,4 +266,10 @@ urlpatterns = [
         SavedJobListAPIView.as_view(),
         name="saved-jobs"
     ),
+
+    path(
+    "dashboard/stats/",
+    DashboardStatsAPIView.as_view(),
+    name="dashboard-stats"
+),
 ]
