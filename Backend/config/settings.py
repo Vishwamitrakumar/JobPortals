@@ -22,12 +22,12 @@ SECRET_KEY = os.getenv(
     "django-insecure-change-this-in-production"
 )
 
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
-    "jobportals-pd63.onrender.com",
+    "https://jobportals-4phj.onrender.com",
 ]
 
 
@@ -116,11 +116,11 @@ TEMPLATES = [
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "jobportal",
-        "USER": "root",
+        "NAME": os.getenv("DB_NAME"),
+        "USER": os.getenv("DB_USER"),
         "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": "127.0.0.1",
-        "PORT": "3306",
+        "HOST": os.getenv("DB_HOST", "127.0.0.1"),
+        "PORT": os.getenv("DB_PORT", "3306"),
     }
 }
 
@@ -182,6 +182,7 @@ STATIC_URL = "static/"
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "https://talvoro.vercel.app",
 ]
 
 # Agar Vite frontend bhi use kar rahe ho:
@@ -241,3 +242,8 @@ GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
     "gemini-3.7-flash"
 )
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "https://talvoro.vercel.app",
+]
