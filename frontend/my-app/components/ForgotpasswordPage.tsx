@@ -193,16 +193,13 @@ export default function ForgotPasswordPage() {
                 <span className="h-px flex-1 bg-slate-200" />
               </div>
 
-              <Button
-                asChild
-                variant="secondary"
-                className="w-full bg-slate-50 text-blue-600 hover:bg-slate-100"
-              >
-                <Link href="/login" className="flex items-center justify-center gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Login
-                </Link>
-              </Button>
+             <Link
+  href="/login"
+  className="flex w-full items-center justify-center gap-2 rounded-md bg-slate-50 px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-slate-100"
+>
+  <ArrowLeft className="h-4 w-4" />
+  Back to Login
+</Link>
             </CardContent>
           </Card>
         </div>
