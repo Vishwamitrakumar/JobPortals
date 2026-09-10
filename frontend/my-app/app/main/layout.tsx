@@ -17,7 +17,7 @@ export default function DashboardLayout({
         <DashboardHeader />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto pt-3">
           {children}
         </main>
       </div>

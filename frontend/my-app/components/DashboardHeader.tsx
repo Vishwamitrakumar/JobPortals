@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -41,11 +40,14 @@ type Profile = {
 export default function DashboardHeader() {
   const API = process.env.NEXT_PUBLIC_API;
 
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] =
+    useState<User | null>(null);
 
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] =
+    useState<Profile | null>(null);
 
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] =
+    useState(0);
 
   const [showProfileMenu, setShowProfileMenu] =
     useState(false);
@@ -58,6 +60,7 @@ export default function DashboardHeader() {
 
   // =====================================================
   // TOAST HELPER
+  // Same pattern as LoginForm
   // =====================================================
 
   const showLoginToast = (
@@ -118,7 +121,7 @@ export default function DashboardHeader() {
         const token =
           localStorage.getItem("access");
 
-        if (!token || !API) {
+        if (!token) {
           return;
         }
 
@@ -163,7 +166,9 @@ export default function DashboardHeader() {
       }
     };
 
-    fetchProfile();
+    if (API) {
+      fetchProfile();
+    }
   }, [API]);
 
   // =====================================================
@@ -207,7 +212,7 @@ export default function DashboardHeader() {
               "access"
             );
 
-          if (!token || !API) {
+          if (!token) {
             setUnreadCount(0);
             return;
           }
@@ -251,7 +256,9 @@ export default function DashboardHeader() {
         }
       };
 
-    fetchUnreadCount();
+    if (API) {
+      fetchUnreadCount();
+    }
   }, [API]);
 
   // =====================================================
@@ -329,16 +336,6 @@ export default function DashboardHeader() {
             "error",
             "Authentication Required",
             "Please login again."
-          );
-
-          return;
-        }
-
-        if (!API) {
-          showLoginToast(
-            "error",
-            "Configuration Error",
-            "API URL is not configured."
           );
 
           return;
@@ -426,7 +423,9 @@ export default function DashboardHeader() {
           "Profile photo updated successfully."
         );
 
+        // Close dropdown
         setShowProfileMenu(false);
+
       } catch (error) {
         console.error(
           "Profile image upload failed:",
@@ -477,219 +476,94 @@ export default function DashboardHeader() {
 
   return (
     <>
-      <header
-        className="
-          w-full
-          border-b
-          bg-white
-          px-4
-          py-4
-          sm:px-5
-          sm:py-5
-          md:px-6
-          lg:px-8
-        "
-      >
-        <div
-          className="
-            flex
-            w-full
-            flex-col
-            gap-5
-            lg:flex-row
-            lg:items-center
-            lg:justify-between
-          "
-        >
+      {/* =====================================================
+          HEADER
+          Mobile: column layout, 10px side margin, no overlap
+          sm+: original row layout restored
+      ===================================================== */}
+
+      <header className="flex flex-col gap-4 border-b px-[10px] py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-8 sm:py-5">
+
+        {/* =================================================
+            LEFT
+        ================================================= */}
+
+        <div className=" min-w-0 ml-15 sm:ml-0">
+          <h1 className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900 sm:text-2xl">
+
+            <span className="truncate">
+              Welcome back,{" "}
+              {user?.username ||
+                "Guest"}!
+            </span>
+
+            <PartyPopper className="h-5 w-5 shrink-0 text-amber-400 sm:h-7 sm:w-7" />
+
+          </h1>
+
+          <p className="mt-1 text-sm text-slate-500 sm:mt-2 sm:text-lg">
+            Here's what's happening
+            with your job search today.
+          </p>
+        </div>
+
+        {/* =================================================
+            RIGHT
+        ================================================= */}
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+
           {/* =================================================
-              LEFT SECTION
+              SEARCH
           ================================================= */}
 
-          <div
-            className="
-              min-w-0
-              flex-1
-            "
-          >
-            <h1
-              className="
-                flex
-                items-center
-                gap-2
-                text-xl
-                font-bold
-                leading-tight
-                text-slate-900
-                sm:text-2xl
-              "
-            >
-              <span className="truncate">
-                Welcome back,{" "}
-                {user?.username || "Guest"}!
-              </span>
+          <div className="relative w-full sm:w-[430px]">
 
-              <PartyPopper
-                className="
-                  h-5
-                  w-5
-                  shrink-0
-                  text-amber-400
-                  sm:h-7
-                  sm:w-7
-                "
-              />
-            </h1>
+            <Search
+              className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 sm:right-5 sm:h-5 sm:w-5"
+            />
 
-            <p
-              className="
-                mt-2
-                text-sm
-                leading-5
-                text-slate-500
-                sm:text-base
-                md:text-lg
-              "
-            >
-              Here's what's happening
-              with your job search today.
-            </p>
+            <Input
+              placeholder="Search for jobs, companies..."
+              className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-4 pr-11 text-sm focus-visible:ring-blue-500 sm:h-14 sm:pl-5 sm:pr-14 sm:text-base"
+            />
+
           </div>
 
           {/* =================================================
-              RIGHT SECTION
+              NOTIFICATION + PROFILE ROW
+              Kept together on mobile so they sit side by side
+              under the search bar, not overlapping the heading
           ================================================= */}
 
-          <div
-            className="
-              flex
-              w-full
-              min-w-0
-              items-center
-              gap-2
-              sm:gap-3
-              lg:w-auto
-              lg:gap-5
-              xl:gap-6
-            "
-          >
-            {/* =================================================
-                SEARCH
-            ================================================= */}
+          <div className="flex items-center justify-between gap-3 sm:justify-start sm:gap-6">
 
-            <div
-              className="
-                relative
-                min-w-0
-                flex-1
-                sm:flex-none
-                sm:w-[260px]
-                md:w-[320px]
-                lg:w-[300px]
-                xl:w-[430px]
-              "
-            >
-              <Search
-                className="
-                  absolute
-                  right-3
-                  top-1/2
-                  h-5
-                  w-5
-                  -translate-y-1/2
-                  text-slate-400
-                  sm:right-4
-                "
-              />
-
-              <Input
-                placeholder="Search for jobs, companies..."
-                className="
-                  h-11
-                  w-full
-                  rounded-xl
-                  border-slate-200
-                  bg-slate-50
-                  pl-4
-                  pr-11
-                  text-sm
-                  focus-visible:ring-blue-500
-                  sm:h-12
-                  sm:rounded-2xl
-                  sm:pl-5
-                  sm:pr-12
-                  sm:text-base
-                  lg:h-14
-                "
-              />
-            </div>
-
-            {/* =================================================
-                NOTIFICATION
-            ================================================= */}
+            {/* NOTIFICATION */}
 
             <Button
               variant="ghost"
               size="icon"
-              className="
-                relative
-                h-10
-                w-10
-                shrink-0
-                rounded-full
-                hover:bg-slate-100
-                sm:h-11
-                sm:w-11
-              "
+              className="relative shrink-0 rounded-full hover:bg-slate-100"
             >
-              <Bell
-                className="
-                  h-5
-                  w-5
-                  text-slate-600
-                  sm:h-6
-                  sm:w-6
-                "
-              />
+
+              <Bell className="h-5 w-5 text-slate-600 sm:h-6 sm:w-6" />
 
               {unreadCount > 0 && (
-                <span
-                  className="
-                    absolute
-                    -right-0.5
-                    -top-0.5
-                    flex
-                    h-5
-                    min-w-5
-                    items-center
-                    justify-center
-                    rounded-full
-                    bg-red-600
-                    px-1
-                    text-[10px]
-                    font-semibold
-                    text-white
-                    sm:-right-1
-                    sm:-top-1
-                    sm:text-[11px]
-                  "
-                >
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white">
+
                   {unreadCount > 99
                     ? "99+"
                     : unreadCount}
+
                 </span>
               )}
+
             </Button>
 
-            {/* =================================================
-                PROFILE
-            ================================================= */}
+            {/* PROFILE */}
 
-            <div
-              className="
-                relative
-                shrink-0
-              "
-            >
+            <div className="relative min-w-0">
+
               {/* Profile Button */}
 
               <button
@@ -699,32 +573,15 @@ export default function DashboardHeader() {
                     (prev) => !prev
                   )
                 }
-                className="
-                  flex
-                  items-center
-                  gap-2
-                  rounded-xl
-                  px-1
-                  py-1
-                  transition
-                  hover:bg-slate-100
-                  sm:gap-3
-                  sm:px-2
-                "
+                className="flex min-w-0 items-center gap-2 rounded-xl px-2 py-1 transition hover:bg-slate-100 sm:gap-3"
               >
+
                 {/* Avatar */}
 
-                <div className="relative">
-                  <Avatar
-                    className="
-                      h-10
-                      w-10
-                      sm:h-12
-                      sm:w-12
-                      md:h-14
-                      md:w-14
-                    "
-                  >
+                <div className="relative shrink-0">
+
+                  <Avatar className="h-10 w-10 sm:h-14 sm:w-14">
+
                     <AvatarImage
                       src={getProfileImage()}
                       alt="Profile"
@@ -733,131 +590,54 @@ export default function DashboardHeader() {
                     <AvatarFallback>
                       {getInitial()}
                     </AvatarFallback>
+
                   </Avatar>
 
                   {/* Camera Icon */}
 
-                  <span
-                    className="
-                      absolute
-                      bottom-0
-                      right-0
-                      flex
-                      h-4
-                      w-4
-                      items-center
-                      justify-center
-                      rounded-full
-                      bg-blue-600
-                      text-white
-                      sm:h-5
-                      sm:w-5
-                    "
-                  >
-                    <Camera
-                      className="
-                        h-2.5
-                        w-2.5
-                        sm:h-3
-                        sm:w-3
-                      "
-                    />
+                  <span className="absolute bottom-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-white sm:h-5 sm:w-5">
+
+                    <Camera className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+
                   </span>
+
                 </div>
 
-                {/* User Info */}
+                {/* User Info - hidden on very small screens to avoid crowding, shown from sm up */}
 
-                <div
-                  className="
-                    hidden
-                    min-w-0
-                    text-left
-                    md:block
-                  "
-                >
-                  <h3
-                    className="
-                      max-w-[140px]
-                      truncate
-                      font-semibold
-                      text-slate-900
-                      lg:max-w-[180px]
-                    "
-                  >
+                <div className="hidden min-w-0 text-left sm:block">
+
+                  <h3 className="truncate font-semibold text-slate-900">
                     {user?.username ||
                       "Guest"}
                   </h3>
 
-                  <p
-                    className="
-                      max-w-[140px]
-                      truncate
-                      text-sm
-                      text-slate-500
-                      lg:max-w-[180px]
-                    "
-                  >
+                  <p className="truncate text-sm text-slate-500">
                     {user?.email ||
                       "Candidate"}
                   </p>
+
                 </div>
 
-                <ChevronDown
-                  className="
-                    hidden
-                    h-5
-                    w-5
-                    shrink-0
-                    text-slate-500
-                    md:block
-                  "
-                />
+                <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 sm:h-5 sm:w-5" />
+
               </button>
 
               {/* =================================================
                   PROFILE DROPDOWN
+                  Mobile: anchored to right edge but width capped
+                  so it never overflows the 10px side margin
               ================================================= */}
 
               {showProfileMenu && (
-                <div
-                  className="
-                    absolute
-                    right-0
-                    top-[52px]
-                    z-50
-                    w-[calc(100vw-32px)]
-                    max-w-72
-                    rounded-xl
-                    border
-                    bg-white
-                    p-3
-                    shadow-xl
-                    sm:top-[60px]
-                    sm:w-72
-                  "
-                >
+                <div className="absolute right-0 top-[60px] z-50 w-60 max-w-[calc(100vw-20px)] rounded-xl border bg-white p-3 shadow-lg sm:top-[68px] sm:w-64">
+
                   {/* Current Profile */}
 
-                  <div
-                    className="
-                      mb-3
-                      flex
-                      min-w-0
-                      items-center
-                      gap-3
-                      border-b
-                      pb-3
-                    "
-                  >
-                    <Avatar
-                      className="
-                        h-11
-                        w-11
-                        shrink-0
-                        sm:h-12
-                        sm:w-12
-                      "
-                    >
+                  <div className="mb-3 flex items-center gap-3 border-b pb-3">
+
+                    <Avatar className="h-12 w-12">
+
                       <AvatarImage
                         src={getProfileImage()}
                         alt="Profile"
@@ -866,29 +646,22 @@ export default function DashboardHeader() {
                       <AvatarFallback>
                         {getInitial()}
                       </AvatarFallback>
+
                     </Avatar>
 
                     <div className="min-w-0">
-                      <p
-                        className="
-                          truncate
-                          font-semibold
-                        "
-                      >
+
+                      <p className="truncate font-semibold">
                         {user?.username ||
                           "Guest"}
                       </p>
 
-                      <p
-                        className="
-                          truncate
-                          text-xs
-                          text-slate-500
-                        "
-                      >
+                      <p className="truncate text-xs text-slate-500">
                         {user?.email || ""}
                       </p>
+
                     </div>
+
                   </div>
 
                   {/* Hidden File Input */}
@@ -896,12 +669,7 @@ export default function DashboardHeader() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="
-                      image/png,
-                      image/jpeg,
-                      image/jpg,
-                      image/webp
-                    "
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
                     className="hidden"
                     onChange={
                       handleProfileImageChange
@@ -918,35 +686,26 @@ export default function DashboardHeader() {
                     disabled={
                       uploadingImage
                     }
-                    className="
-                      flex
-                      w-full
-                      items-center
-                      gap-3
-                      rounded-lg
-                      px-3
-                      py-2.5
-                      text-left
-                      text-sm
-                      transition
-                      hover:bg-slate-100
-                      disabled:cursor-not-allowed
-                      disabled:opacity-50
-                    "
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <Camera className="h-4 w-4 shrink-0" />
 
-                    <span>
-                      {uploadingImage
-                        ? "Uploading..."
-                        : "Change profile photo"}
-                    </span>
+                    <Camera className="h-4 w-4" />
+
+                    {uploadingImage
+                      ? "Uploading..."
+                      : "Change profile photo"}
+
                   </button>
+
                 </div>
               )}
+
             </div>
+
           </div>
+
         </div>
+
       </header>
 
       {/* =====================================================
