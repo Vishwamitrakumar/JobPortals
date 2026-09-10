@@ -26,10 +26,10 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
 
     if (!email.trim()) {
-      toast({
+      toast.add({
+        type: "error",
         title: "Email required",
         description: "Enter your registered email address to continue.",
-        variant: "destructive",
       });
       return;
     }
@@ -49,16 +49,17 @@ export default function ForgotPasswordPage() {
         throw new Error("Failed to send reset link");
       }
 
-      toast({
+      toast.add({
+        type: "success",
         title: "Reset link sent",
         description: `Check ${email} for instructions to reset your password.`,
       });
       setEmail("");
     } catch (error) {
-      toast({
+      toast.add({
+        type: "error",
         title: "Something went wrong",
         description: "We couldn't send the reset link. Please try again.",
-        variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
