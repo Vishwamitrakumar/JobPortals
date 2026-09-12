@@ -14,7 +14,7 @@ interface ProfileStrengthData {
   sections: {
     basic_information: boolean;
     work_experience: boolean;
-    education: boolean;
+    education: boolean; 
     skills: boolean;
   };
 }
@@ -138,7 +138,11 @@ function calculateProfileStrength(
   };
 }
 
-export default function ProfileStrength() {
+export default function ProfileStrength({
+  onReady,
+}: {
+  onReady?: () => void;
+}) {
   const [profileStrength, setProfileStrength] =
     useState<ProfileStrengthData>(defaultStrength);
   const router = useRouter();
@@ -248,11 +252,12 @@ export default function ProfileStrength() {
         setProfileStrength(defaultStrength);
       } finally {
         setLoading(false);
+        onReady?.();
       }
     };
 
     fetchProfileStrength();
-  }, []);
+  }, [onReady]);
 
 
   const circumference = 264;

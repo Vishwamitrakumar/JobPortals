@@ -15,6 +15,8 @@ from .views import (
     DeleteAccountAPIView,
     ChangePasswordAPIView,
     GoogleLoginAPIView,
+    ForgotPasswordAPIView,
+    ResetPasswordAPIView,
 )
 
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -272,4 +274,16 @@ urlpatterns = [
     DashboardStatsAPIView.as_view(),
     name="dashboard-stats"
 ),
+
+     path(
+        "forgot-password/",
+        ForgotPasswordAPIView.as_view(),
+        name="forgot-password"
+    ),
+
+    path(
+        "reset-password/",
+        ResetPasswordAPIView.as_view(),
+        name="reset-password"
+    ),
 ]

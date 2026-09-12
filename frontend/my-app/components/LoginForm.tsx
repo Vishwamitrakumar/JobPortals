@@ -33,7 +33,7 @@ export default function LoginForm({
     };
 
     const API = process.env.NEXT_PUBLIC_API;
-    console.log("NEXT_PUBLIC_API =", process.env.NEXT_PUBLIC_API);
+    
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -216,7 +216,7 @@ export default function LoginForm({
                             />
                             <span className="text-slate-600">Remember me</span>
                         </label>
-                        <a href="#" className="text-[#2F6FE0] font-medium hover:underline">
+                        <a href="/forgot-password" className="text-[#2F6FE0] font-medium hover:underline">
                             Forgot Password?
                         </a>
                     </div>

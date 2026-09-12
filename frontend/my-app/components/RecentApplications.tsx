@@ -52,7 +52,11 @@ interface Job {
   date: string;
 }
 
-export default function RecentApplications() {
+export default function RecentApplications({
+  onReady,
+}: {
+  onReady?: () => void;
+}) {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,8 +98,9 @@ export default function RecentApplications() {
       }
     } finally {
       setLoading(false);
+      onReady?.();
     }
-  }, []);
+  }, [onReady]);
 
   useEffect(() => {
     const controller = new AbortController();

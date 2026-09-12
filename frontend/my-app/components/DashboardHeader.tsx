@@ -192,11 +192,10 @@ export default function DashboardHeader() {
     }
 
     // Relative media path
-    return `${API}${
-      profile.profile_image.startsWith("/")
+    return `${API}${profile.profile_image.startsWith("/")
         ? ""
         : "/"
-    }${profile.profile_image}`;
+      }${profile.profile_image}`;
   };
 
   // =====================================================
@@ -395,8 +394,8 @@ export default function DashboardHeader() {
             "Upload Failed",
             data?.errors
               ?.profile_image?.[0] ||
-              data?.message ||
-              "Failed to update profile image."
+            data?.message ||
+            "Failed to update profile image."
           );
 
           return;
@@ -525,7 +524,22 @@ export default function DashboardHeader() {
 
             <Input
               placeholder="Search for jobs, companies..."
-              className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-4 pr-11 text-sm focus-visible:ring-blue-500 sm:h-14 sm:pl-5 sm:pr-14 sm:text-base"
+              className="  h-11
+    rounded-2xl
+    border-slate-200
+    bg-slate-50
+    pl-4
+    pr-11
+    text-sm
+
+    focus-visible:border-blue-400
+    focus-visible:ring-1
+    focus-visible:ring-blue-300/50
+
+    sm:h-14
+    sm:pl-5
+    sm:pr-14
+    sm:text-base"
             />
 
           </div>

@@ -245,3 +245,7 @@ GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
     "gemini-3.7-flash"
 )
+FRONTEND_URL = os.getenv(
+    "FRONTEND_URL",
+    "https://talvoro.vercel.app"
+)

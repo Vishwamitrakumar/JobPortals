@@ -245,7 +245,11 @@ function JobCardSkeleton() {
 // COMPONENT
 // -----------------------------------------------------------------------------
 
-export default function RecommendedJobs() {
+export default function RecommendedJobs({
+  onReady,
+}: {
+  onReady?: () => void;
+}) {
   const [jobs, setJobs] = useState<Job[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -402,6 +406,7 @@ export default function RecommendedJobs() {
       } finally {
         if (!cancelled) {
           setLoading(false);
+          onReady?.();
         }
       }
     }
@@ -411,7 +416,7 @@ export default function RecommendedJobs() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onReady]);
 
   // ---------------------------------------------------------------------------
   // LOAD MORE ON SCROLL

@@ -22,6 +22,13 @@ from django.contrib.auth import get_user_model
 from .model.notification import Notification
 from django.contrib.auth.hashers import check_password
 import requests
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
+
 
 User = get_user_model()
 
@@ -113,6 +120,204 @@ class ChangePasswordAPIView(APIView):
             },
             status=status.HTTP_200_OK
         )   
+
+# ======================================================
+# FORGOT PASSWORD
+# ======================================================
+
+class ForgotPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        email = request.data.get("email")
+
+        # 1. Check email
+        if not email:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Email is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        email = email.strip().lower()
+
+        User = get_user_model()
+
+        # 2. Check user exists
+        try:
+            user = User.objects.get(
+                email__iexact=email
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "message": "No account found with this email address."
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 3. Generate UID
+        uid = urlsafe_base64_encode(
+            force_bytes(user.pk)
+        )
+
+        # 4. Generate secure token
+        token = default_token_generator.make_token(user)
+
+        # 5. Create reset link
+        reset_link = (
+            f"{settings.FRONTEND_URL}"
+            f"/reset-password"
+            f"?uid={uid}"
+            f"&token={token}"
+        )
+
+        # 6. Send data to frontend
+        # Frontend will use EmailJS
+        return Response(
+            {
+                "success": True,
+                "message": "Reset link generated successfully.",
+                "email": user.email,
+                "reset_link": reset_link
+            },
+            status=status.HTTP_200_OK
+        )
+
+# ======================================================
+# RESET PASSWORD
+# ======================================================
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        uid = request.data.get("uid")
+        token = request.data.get("token")
+        new_password = request.data.get("new_password")
+        confirm_password = request.data.get("confirm_password")
+
+        # 1. Required fields
+        if not uid:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Reset user ID is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not token:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Reset token is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not new_password:
+            return Response(
+                {
+                    "success": False,
+                    "message": "New password is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not confirm_password:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Confirm password is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Password match
+        if new_password != confirm_password:
+            return Response(
+                {
+                    "success": False,
+                    "message": "New password and confirm password do not match."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Decode UID
+        User = get_user_model()
+
+        try:
+            user_id = force_str(
+                urlsafe_base64_decode(uid)
+            )
+
+            user = User.objects.get(
+                pk=user_id
+            )
+
+        except (
+            TypeError,
+            ValueError,
+            OverflowError,
+            User.DoesNotExist,
+        ):
+            return Response(
+                {
+                    "success": False,
+                    "message": "Invalid password reset link."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 4. Verify token
+        if not default_token_generator.check_token(
+            user,
+            token
+        ):
+            return Response(
+                {
+                    "success": False,
+                    "message": "This password reset link is invalid or expired."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 5. Validate password
+        try:
+            validate_password(
+                new_password,
+                user
+            )
+
+        except ValidationError as error:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Password validation failed.",
+                    "errors": error.messages
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 6. Update password
+        user.set_password(new_password)
+        user.save()
+
+        # 7. Success
+        return Response(
+            {
+                "success": True,
+                "message": "Password reset successfully."
+            },
+            status=status.HTTP_200_OK
+        )
 
 class GoogleLoginAPIView(APIView):
     permission_classes = [AllowAny]
