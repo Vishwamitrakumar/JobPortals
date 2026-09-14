@@ -12,7 +12,11 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const API_BASE = process.env.NEXT_PUBLIC_API;
 
-export default function DashboardStats() {
+export default function DashboardStats({
+  onReady,
+}: {
+  onReady?: () => void;
+}) {
   const [stats, setStats] = useState({
     applications: 0,
     interviews: 0,
@@ -47,11 +51,12 @@ export default function DashboardStats() {
         console.error("Dashboard stats error:", error);
       } finally {
         setLoading(false);
+        onReady?.();
       }
     };
 
     fetchDashboardStats();
-  }, []);
+  }, [onReady]);
 
   const cards = [
     {

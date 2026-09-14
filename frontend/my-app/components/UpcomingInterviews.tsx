@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-const API_BASE = "http://127.0.0.1:8000";
-const INTERVIEW_URL = `${API_BASE}/api/apply/`;
+const API = process.env.NEXT_PUBLIC_API;
+const INTERVIEW_URL = `${API}/api/apply/`;
 
 const AVATAR_COLORS = [
   "bg-blue-600",
@@ -46,7 +46,11 @@ function formatInterviewTime(time: string) {
   });
 }
 
-export default function UpcomingInterviews() {
+export default function UpcomingInterviews({
+  onReady,
+}: {
+  onReady?: () => void;
+}) {
   const [interviews, setInterviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -127,6 +131,7 @@ export default function UpcomingInterviews() {
       setInterviews([]);
     } finally {
       setLoading(false);
+      onReady?.();
     }
   };
 

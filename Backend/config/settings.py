@@ -44,7 +44,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 INSTALLED_APPS = [
     "Jobportal",
-
+    "resume",
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -244,4 +244,8 @@ GEMINI_API_KEY = os.getenv(
 GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
     "gemini-3.7-flash"
+)
+FRONTEND_URL = os.getenv(
+    "FRONTEND_URL",
+    "https://talvoro.vercel.app"
 )

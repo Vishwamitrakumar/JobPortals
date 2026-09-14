@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 const API_BASE = process.env.NEXT_PUBLIC_API || "";
 const LIST_URL = `${API_BASE}/api/my-applications/`;
@@ -52,7 +53,11 @@ interface Job {
   date: string;
 }
 
-export default function RecentApplications() {
+export default function RecentApplications({
+  onReady,
+}: {
+  onReady?: () => void;
+}) {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,8 +99,9 @@ export default function RecentApplications() {
       }
     } finally {
       setLoading(false);
+      onReady?.();
     }
-  }, []);
+  }, [onReady]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -121,7 +127,12 @@ export default function RecentApplications() {
     <Card className="rounded-2xl">
       <CardHeader className="flex flex-row justify-between">
         <CardTitle>Recent Applications</CardTitle>
-        <button className="text-sm text-blue-600">View All</button>
+        <Link
+          href="/main/MyApplication"
+          className="text-sm text-blue-600 cursor-pointer hover:text-blue-700"
+        >
+          View All
+        </Link>
       </CardHeader>
 
       <CardContent>

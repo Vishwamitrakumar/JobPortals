@@ -75,7 +75,11 @@ const FILTER_SUFFIX: Record<FilterValue, string> = {
 // COMPONENT
 // ==================================================
 
-const ApplicationOverview = () => {
+const ApplicationOverview = ({
+  onReady,
+}: {
+  onReady?: () => void;
+}) => {
   const [applications, setApplications] = useState<Application[]>(
     []
   );
@@ -193,9 +197,10 @@ const ApplicationOverview = () => {
         }
       } finally {
         setLoading(false);
+        onReady?.();
       }
     },
-    []
+    [onReady]
   );
 
   // ==================================================

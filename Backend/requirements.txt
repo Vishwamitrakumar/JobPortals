@@ -39,3 +39,6 @@ tzdata==2026.3
 urllib3==2.7.0
 websockets==16.1.1
 psycopg[binary]==3.3.5
+pgvector
+pypdf
+openai

@@ -75,7 +75,7 @@ export default function JobApplicants() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [token, setToken] = useState("");
+
   const [openId, setOpenId] = useState(null);
   const [draftStatus, setDraftStatus] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
@@ -94,10 +94,19 @@ export default function JobApplicants() {
 
   const debounceRef = useRef(null);
 
- useEffect(() => {
-  const storedToken = localStorage.getItem("access");
-  setToken(storedToken || "");
-}, []);
+  // FIX: localStorage is a browser-only API. Reading it directly in the
+  // component body (`const token = localStorage.getItem("access")`) runs
+  // during Next.js server-side prerendering too, where `localStorage`
+  // doesn't exist — that's exactly what caused:
+  //   "ReferenceError: localStorage is not defined"
+  // during `next build`. The fix: keep the token in state and only read
+  // localStorage inside useEffect, which only ever runs in the browser.
+  const [token, setToken] = useState(null);
+
+  useEffect(() => {
+    setToken(localStorage.getItem("access"));
+  }, []);
+
   // Debounce the search box -> searchQuery (waits 400ms after typing stops)
   const handleSearchChange = (value) => {
     setSearchInput(value);
@@ -110,6 +119,10 @@ export default function JobApplicants() {
 
   // Fetch a page of applicants from the Django API
   const fetchApplicants = useCallback(async (page, search) => {
+    // Guard: don't fire the request until we've actually read the token
+    // from localStorage on the client.
+    if (!token) return;
+
     setLoading(true);
     setError("");
     try {
@@ -151,11 +164,12 @@ export default function JobApplicants() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
+    if (!token) return;
     fetchApplicants(currentPage, searchQuery);
-  }, [currentPage, searchQuery, fetchApplicants]);
+  }, [currentPage, searchQuery, token, fetchApplicants]);
 
   const totalPages = Math.max(1, Math.ceil(count / (pageSize || 5)));
 

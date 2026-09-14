@@ -97,9 +97,8 @@ function Input({ icon: Icon, className = "", ...props }: InputProps) {
     <div className="relative">
       <input
         {...props}
-        className={`w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${
-          Icon ? "pl-9" : ""
-        } ${className}`}
+        className={`w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${Icon ? "pl-9" : ""
+          } ${className}`}
       />
       {Icon && (
         <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -182,22 +181,22 @@ export default function Jobform() {
 
   const summaryItems = job
     ? [
-        { icon: Briefcase, label: "Job Type", value: job.job_type },
-        { icon: Clock3, label: "Experience", value: job.experience_level },
-        { icon: IndianRupee, label: "Salary", value: job.salary_range },
-        {
-          icon: CalendarDays,
-          label: "Posted On",
-          value: new Date(job.created_at).toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }),
-        },
-      ]
+      { icon: Briefcase, label: "Job Type", value: job.job_type },
+      { icon: Clock3, label: "Experience", value: job.experience_level },
+      { icon: IndianRupee, label: "Salary", value: job.salary_range },
+      {
+        icon: CalendarDays,
+        label: "Posted On",
+        value: new Date(job.created_at).toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }),
+      },
+    ]
     : [];
 
-    const API = process.env.NEXT_PUBLIC_API;
+  const API = process.env.NEXT_PUBLIC_API;
 
   useEffect(() => {
     async function getJob() {
@@ -240,6 +239,7 @@ export default function Jobform() {
 
 
 
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -266,8 +266,18 @@ export default function Jobform() {
     }
 
     try {
+      const token = localStorage.getItem("access");
+
+      if (!token) {
+        alert("Please login first.");
+        return;
+      }
+
       const response = await fetch(`${API}/api/apply/`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: data,
       });
 
@@ -279,7 +289,7 @@ export default function Jobform() {
         router.push("/main/dashboard");
       } else {
         console.log(result);
-        alert("Something went wrong");
+        alert(result?.message || "Something went wrong");
       }
     } catch (error) {
       console.log(error);
@@ -287,13 +297,13 @@ export default function Jobform() {
     }
   };
 
-  
-  
+
+
   return (
     <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
         {/* Back link */}
-        <a   
+        <a
           onClick={() => router.push("/main/dashboard")}
           href="#"
           className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
@@ -319,26 +329,26 @@ export default function Jobform() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <Label required>Full Name</Label>
-                <Input
-                  placeholder="Enter your full name"
-                  required
-                  value={formData.full_name}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setFormData({ ...formData, full_name: e.target.value })
-                  }
-                />
+                  <Input
+                    placeholder="Enter your full name"
+                    required
+                    value={formData.full_name}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      setFormData({ ...formData, full_name: e.target.value })
+                    }
+                  />
                 </div>
                 <div>
                   <Label required>Email Address</Label>
-                 <Input
-                  type="email"
-                  placeholder="Enter your email address"
-                  required
-                  value={formData.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                />
+                  <Input
+                    type="email"
+                    placeholder="Enter your email address"
+                    required
+                    value={formData.email}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
+                  />
                 </div>
 
                 <div>
@@ -533,7 +543,7 @@ export default function Jobform() {
               <div className="flex gap-3 sm:justify-end">
                 <button
                   type="button"
-                   onClick={() => router.push("/main/dashboard")}
+                  onClick={() => router.push("/main/dashboard")}
                   className="rounded-md border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
                   Cancel

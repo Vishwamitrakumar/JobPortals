@@ -172,10 +172,7 @@ function PersonIllustration() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Right side: My Applications panel — server-side paginated,         */
-/*  searched, and status-filtered via the Django API                   */
-/* ------------------------------------------------------------------ */
+
 
 function MyApplicationsPanel() {
   const [statusFilter, setStatusFilter] = useState<string>("All Status");

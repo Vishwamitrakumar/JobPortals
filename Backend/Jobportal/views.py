@@ -22,6 +22,19 @@ from django.contrib.auth import get_user_model
 from .model.notification import Notification
 from django.contrib.auth.hashers import check_password
 import requests
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
+
+# Resume app se
+from resume.models import Resume
+from resume.services.job_recommender import (
+    parse_job_skills,
+    calculate_skill_match,
+)
 
 User = get_user_model()
 
@@ -113,6 +126,204 @@ class ChangePasswordAPIView(APIView):
             },
             status=status.HTTP_200_OK
         )   
+
+# ======================================================
+# FORGOT PASSWORD
+# ======================================================
+
+class ForgotPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        email = request.data.get("email")
+
+        # 1. Check email
+        if not email:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Email is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        email = email.strip().lower()
+
+        User = get_user_model()
+
+        # 2. Check user exists
+        try:
+            user = User.objects.get(
+                email__iexact=email
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "message": "No account found with this email address."
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 3. Generate UID
+        uid = urlsafe_base64_encode(
+            force_bytes(user.pk)
+        )
+
+        # 4. Generate secure token
+        token = default_token_generator.make_token(user)
+
+        # 5. Create reset link
+        reset_link = (
+            f"{settings.FRONTEND_URL}"
+            f"/reset-password"
+            f"?uid={uid}"
+            f"&token={token}"
+        )
+
+        # 6. Send data to frontend
+        # Frontend will use EmailJS
+        return Response(
+            {
+                "success": True,
+                "message": "Reset link generated successfully.",
+                "email": user.email,
+                "reset_link": reset_link
+            },
+            status=status.HTTP_200_OK
+        )
+
+# ======================================================
+# RESET PASSWORD
+# ======================================================
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        uid = request.data.get("uid")
+        token = request.data.get("token")
+        new_password = request.data.get("new_password")
+        confirm_password = request.data.get("confirm_password")
+
+        # 1. Required fields
+        if not uid:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Reset user ID is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not token:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Reset token is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not new_password:
+            return Response(
+                {
+                    "success": False,
+                    "message": "New password is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not confirm_password:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Confirm password is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Password match
+        if new_password != confirm_password:
+            return Response(
+                {
+                    "success": False,
+                    "message": "New password and confirm password do not match."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Decode UID
+        User = get_user_model()
+
+        try:
+            user_id = force_str(
+                urlsafe_base64_decode(uid)
+            )
+
+            user = User.objects.get(
+                pk=user_id
+            )
+
+        except (
+            TypeError,
+            ValueError,
+            OverflowError,
+            User.DoesNotExist,
+        ):
+            return Response(
+                {
+                    "success": False,
+                    "message": "Invalid password reset link."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 4. Verify token
+        if not default_token_generator.check_token(
+            user,
+            token
+        ):
+            return Response(
+                {
+                    "success": False,
+                    "message": "This password reset link is invalid or expired."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 5. Validate password
+        try:
+            validate_password(
+                new_password,
+                user
+            )
+
+        except ValidationError as error:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Password validation failed.",
+                    "errors": error.messages
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 6. Update password
+        user.set_password(new_password)
+        user.save()
+
+        # 7. Success
+        return Response(
+            {
+                "success": True,
+                "message": "Password reset successfully."
+            },
+            status=status.HTTP_200_OK
+        )
 
 class GoogleLoginAPIView(APIView):
     permission_classes = [AllowAny]
@@ -310,23 +521,142 @@ class JobCreateAPIView(APIView):
         )
 
 class JobListAPIView(ListAPIView):
+
     queryset = Job.objects.all()
     serializer_class = JobSerializer
     permission_classes = [AllowAny]
 
+    def list(self, request, *args, **kwargs):
+
+        # =========================================
+        # 1. ALL JOBS
+        # =========================================
+
+        jobs = self.get_queryset()
+
+        # =========================================
+        # 2. CURRENT USER RESUME SKILLS
+        # =========================================
+
+        resume_skills = []
+
+        if request.user.is_authenticated:
+
+            try:
+
+                resume = Resume.objects.get(
+                    user=request.user
+                )
+
+                resume_skills = resume.skills or []
+
+            except Resume.DoesNotExist:
+
+                resume_skills = []
+
+        # =========================================
+        # 3. SERIALIZE ALL JOBS
+        # =========================================
+
+        serializer = self.get_serializer(
+            jobs,
+            many=True
+        )
+
+        jobs_data = serializer.data
+
+        # =========================================
+        # 4. CALCULATE MATCH
+        # =========================================
+
+        for job_data in jobs_data:
+
+            job_skills = parse_job_skills(
+                job_data.get("key_skills", "")
+            )
+
+            match_result = calculate_skill_match(
+                resume_skills,
+                job_skills
+            )
+
+            job_data["match_score"] = (
+                match_result["match_score"]
+            )
+
+            job_data["matched_skills"] = (
+                match_result["matched_skills"]
+            )
+
+            job_data["missing_skills"] = (
+                match_result["missing_skills"]
+            )
+
+        # =========================================
+        # 5. RANKING
+        # =========================================
+
+        jobs_data.sort(
+            key=lambda job: job["match_score"],
+            reverse=True
+        )
+
+        # =========================================
+        # 6. RESPONSE
+        # =========================================
+
+        return Response(
+            jobs_data,
+            status=status.HTTP_200_OK
+        )
+
 class JobDetailAPIView(RetrieveAPIView):
+
     queryset = Job.objects.all()
     serializer_class = JobSerializer
     permission_classes = [AllowAny]
+
+    def retrieve(self, request, *args, **kwargs):
+
+        # Get job
+        job = self.get_object()
+
+        # Serialize job data
+        serializer = self.get_serializer(job)
+
+        # Default
+        has_applied = False
+
+        # If user is logged in
+        if request.user.is_authenticated:
+
+            has_applied = ApplyForm.objects.filter(
+                user=request.user,
+                job=job
+            ).exists()
+
+        # Convert serializer data to dictionary
+        data = serializer.data
+
+        # Add application status
+        data["has_applied"] = has_applied
+
+        return Response(
+            data,
+            status=status.HTTP_200_OK
+        )
 
 class ApplyFormAPIView(APIView):
 
     parser_classes = (MultiPartParser, FormParser)
 
+    # Only logged-in users can apply
     def get_permissions(self):
-        if self.request.method == "POST":
-            return [AllowAny()]
         return [IsAuthenticated()]
+
+    # =========================================
+    # GET APPLICATIONS
+    # =========================================
 
     def get(self, request):
 
@@ -345,23 +675,61 @@ class ApplyFormAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
+    # =========================================
+    # POST APPLICATION
+    # =========================================
+
     def post(self, request):
 
-        serializer = ApplyFormSerializer(data=request.data)
+        # 1. Get job ID
+        job_id = request.data.get("job")
+
+        if not job_id:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Job is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Check duplicate application
+        already_applied = ApplyForm.objects.filter(
+            user=request.user,
+            job_id=job_id
+        ).exists()
+
+        if already_applied:
+            return Response(
+                {
+                    "success": False,
+                    "already_applied": True,
+                    "message": "You have already applied for this job."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Validate application data
+        serializer = ApplyFormSerializer(
+            data=request.data
+        )
 
         if serializer.is_valid():
 
-            # 1. Application save
-            application = serializer.save()
+            # 4. Save application with logged-in user
+            application = serializer.save(
+                user=request.user
+            )
 
-            # 2. Applied job
+            # 5. Applied job
             job = application.job
 
-            # 3. Job owner / recruiter
+            # 6. Job owner / recruiter
             recruiter = job.posted_by
 
-            # 4. Send notification to recruiter
+            # 7. Send notification to recruiter
             if recruiter:
+
                 Notification.objects.create(
                     recipient=recruiter,
                     notification_type="APPLICATION_SUBMITTED",
@@ -375,16 +743,22 @@ class ApplyFormAPIView(APIView):
                     is_read=False
                 )
 
+            # 8. Success response
             return Response(
                 {
                     "success": True,
+                    "already_applied": True,
                     "message": "Application Submitted Successfully"
                 },
                 status=status.HTTP_201_CREATED
             )
 
+        # 9. Validation errors
         return Response(
-            serializer.errors,
+            {
+                "success": False,
+                "errors": serializer.errors
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
 

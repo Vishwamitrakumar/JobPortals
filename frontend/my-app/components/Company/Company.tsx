@@ -38,7 +38,35 @@ interface Job {
   created_at: string;
 }
 
+/* -------------------------------------------------------
+   Saved Job Types
+------------------------------------------------------- */
+
+interface SavedJob {
+  id: number;
+  job_id: number;
+  created_at: string;
+  title: string;
+  company: string;
+  location: string;
+  job_type: string;
+  level: string;
+  category: string;
+  logo: string;
+}
+
+interface SavedJobsListResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: {
+    success: boolean;
+    jobs: SavedJob[];
+  };
+}
+
 const API_URL = `${process.env.NEXT_PUBLIC_API}/api/jobs`;
+const SAVED_JOBS_URL = `${process.env.NEXT_PUBLIC_API}/api/saved-jobs/`;
 
 /* -------------------------------------------------------
    Time Ago
@@ -93,6 +121,56 @@ function timeAgo(dateString: string) {
 }
 
 /* -------------------------------------------------------
+   Auth helper
+------------------------------------------------------- */
+
+function getAccessToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return localStorage.getItem("access");
+}
+
+/* -------------------------------------------------------
+   Save / Unsave API call
+------------------------------------------------------- */
+
+async function saveOrUnsaveJob(jobId: number, action: "save" | "unsave") {
+  const token = getAccessToken();
+
+  if (!token) {
+    throw new Error("User is not logged in");
+  }
+
+  const response = await fetch(`${API_URL}/${jobId}/${action}/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  let data: any = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.detail ||
+        data?.message ||
+        `Failed to ${action} job. Status: ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+/* -------------------------------------------------------
    Company Logo
 ------------------------------------------------------- */
 
@@ -139,7 +217,17 @@ function getSalaryNumber(salary: string) {
    Job Card
 ------------------------------------------------------- */
 
-function JobCard({ job }: { job: Job }) {
+function JobCard({
+  job,
+  isSaved,
+  isPending,
+  onBookmarkClick,
+}: {
+  job: Job;
+  isSaved: boolean;
+  isPending: boolean;
+  onBookmarkClick: (jobId: number) => void;
+}) {
   return (
     <div
       className="
@@ -168,8 +256,15 @@ function JobCard({ job }: { job: Job }) {
 
         <button
           type="button"
-          aria-label={`Save ${job.job_title}`}
-          className="
+          onClick={() => onBookmarkClick(job.id)}
+          disabled={isPending}
+          aria-label={
+            isSaved
+              ? `Remove ${job.job_title} from saved`
+              : `Save ${job.job_title}`
+          }
+          title={isSaved ? "Remove from saved jobs" : "Save job"}
+          className={`
             flex
             h-11
             w-11
@@ -177,16 +272,16 @@ function JobCard({ job }: { job: Job }) {
             justify-center
             rounded-full
             border
-            border-slate-200
-            bg-white
-            text-slate-400
             transition
-            hover:border-blue-200
-            hover:bg-blue-50
-            hover:text-blue-600
-          "
+            ${isPending ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
+            ${
+              isSaved
+                ? "border-blue-200 bg-blue-50 text-blue-600"
+                : "border-slate-200 bg-white text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+            }
+          `}
         >
-          <Bookmark className="h-5 w-5" />
+          <Bookmark className={`h-5 w-5 ${isSaved ? "fill-blue-600" : ""}`} />
         </button>
       </div>
 
@@ -302,6 +397,12 @@ export default function Company() {
 
   const [error, setError] = useState<string | null>(null);
 
+  /* Saved jobs state */
+
+  const [savedJobs, setSavedJobs] = useState<Set<number>>(new Set());
+
+  const [pendingJobs, setPendingJobs] = useState<Set<number>>(new Set());
+
   /* Search */
 
   const [search, setSearch] = useState("");
@@ -319,7 +420,7 @@ export default function Company() {
   const [category, setCategory] = useState("all");
 
   /* -------------------------------------------------------
-     Fetch Jobs
+     Fetch Jobs + Saved Jobs
   ------------------------------------------------------- */
 
   const fetchJobs = async () => {
@@ -327,7 +428,24 @@ export default function Company() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(API_URL);
+      const token = getAccessToken();
+
+      const jobsRequest = token
+        ? fetch(API_URL, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        : fetch(API_URL);
+
+      const savedJobsRequest = token
+        ? fetch(SAVED_JOBS_URL, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        : null;
+
+      const [res, savedResponse] = await Promise.all([
+        jobsRequest,
+        savedJobsRequest,
+      ]);
 
       if (!res.ok) {
         throw new Error(
@@ -338,6 +456,33 @@ export default function Company() {
       const data: Job[] = await res.json();
 
       setJobs(data);
+
+      /* Saved jobs */
+
+      let savedIds = new Set<number>();
+
+      if (savedResponse && savedResponse.ok) {
+        const savedData: SavedJobsListResponse =
+          await savedResponse.json();
+
+        const savedJobsList = Array.isArray(
+          savedData?.results?.jobs
+        )
+          ? savedData.results.jobs
+          : [];
+
+        savedIds = new Set(
+          savedJobsList
+            .map((savedJob) => Number(savedJob.job_id))
+            .filter((id) => !Number.isNaN(id))
+        );
+      } else if (savedResponse && savedResponse.status === 401) {
+        console.warn(
+          "Saved jobs request: user is not authenticated"
+        );
+      }
+
+      setSavedJobs(savedIds);
     } catch (err) {
       setError(
         err instanceof Error
@@ -352,6 +497,92 @@ export default function Company() {
   useEffect(() => {
     fetchJobs();
   }, []);
+
+  /* -------------------------------------------------------
+     Save / Unsave Handlers
+  ------------------------------------------------------- */
+
+  const handleSave = async (jobId: number) => {
+    if (pendingJobs.has(jobId) || savedJobs.has(jobId)) return;
+
+    // Optimistic UI
+    setSavedJobs((previous) => {
+      const next = new Set(previous);
+      next.add(jobId);
+      return next;
+    });
+
+    setPendingJobs((previous) => {
+      const next = new Set(previous);
+      next.add(jobId);
+      return next;
+    });
+
+    try {
+      await saveOrUnsaveJob(jobId, "save");
+    } catch (err) {
+      console.error("Save job error:", err);
+
+      // Revert if API failed
+      setSavedJobs((previous) => {
+        const next = new Set(previous);
+        next.delete(jobId);
+        return next;
+      });
+    } finally {
+      setPendingJobs((previous) => {
+        const next = new Set(previous);
+        next.delete(jobId);
+        return next;
+      });
+    }
+  };
+
+  const handleUnsave = async (jobId: number) => {
+    if (pendingJobs.has(jobId) || !savedJobs.has(jobId)) return;
+
+    // Optimistic UI
+    setSavedJobs((previous) => {
+      const next = new Set(previous);
+      next.delete(jobId);
+      return next;
+    });
+
+    setPendingJobs((previous) => {
+      const next = new Set(previous);
+      next.add(jobId);
+      return next;
+    });
+
+    try {
+      await saveOrUnsaveJob(jobId, "unsave");
+    } catch (err) {
+      console.error("Unsave job error:", err);
+
+      // Restore if API failed
+      setSavedJobs((previous) => {
+        const next = new Set(previous);
+        next.add(jobId);
+        return next;
+      });
+    } finally {
+      setPendingJobs((previous) => {
+        const next = new Set(previous);
+        next.delete(jobId);
+        return next;
+      });
+    }
+  };
+
+  const handleBookmarkClick = (jobId: number) => {
+    if (pendingJobs.has(jobId)) return;
+
+    if (savedJobs.has(jobId)) {
+      handleUnsave(jobId);
+    } else {
+      handleSave(jobId);
+    }
+  };
 
   /* -------------------------------------------------------
      Dynamic Filter Options
@@ -1048,6 +1279,9 @@ export default function Company() {
                 <JobCard
                   key={job.id}
                   job={job}
+                  isSaved={savedJobs.has(job.id)}
+                  isPending={pendingJobs.has(job.id)}
+                  onBookmarkClick={handleBookmarkClick}
                 />
 
               ))}

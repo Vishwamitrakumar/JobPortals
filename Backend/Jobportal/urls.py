@@ -15,6 +15,8 @@ from .views import (
     DeleteAccountAPIView,
     ChangePasswordAPIView,
     GoogleLoginAPIView,
+    ForgotPasswordAPIView,
+    ResetPasswordAPIView,
 )
 
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -43,7 +45,9 @@ from .view.savejob import (
     UnsaveJobAPIView,
     SavedJobListAPIView,
 )
-
+from .view.chatbot_view import (
+    ChatbotAPIView
+)
 
 # Notification Router
 router = DefaultRouter()
@@ -272,4 +276,21 @@ urlpatterns = [
     DashboardStatsAPIView.as_view(),
     name="dashboard-stats"
 ),
+
+     path(
+        "forgot-password/",
+        ForgotPasswordAPIView.as_view(),
+        name="forgot-password"
+    ),
+
+    path(
+        "reset-password/",
+        ResetPasswordAPIView.as_view(),
+        name="reset-password"
+    ),
+     path(
+        "chatbot/",
+        ChatbotAPIView.as_view(),
+        name="chatbot"
+    ),
 ]

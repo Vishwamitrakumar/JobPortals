@@ -72,6 +72,13 @@ class ApplyForm(models.Model):
         ("Selected", "Selected"),
         ("Rejected", "Rejected"),
     ]
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="applications",
+        null=True,
+        blank=True
+    )
 
     job = models.ForeignKey(
         "Jobportal.Job",
@@ -117,7 +124,12 @@ class ApplyForm(models.Model):
 
     class Meta:
         db_table = "ApplyForm"
-
+        constraints = [
+        models.UniqueConstraint(
+            fields=["user", "job"],
+            name="unique_user_job_application"
+        )
+    ]
     def __str__(self):
         return self.full_name
 
