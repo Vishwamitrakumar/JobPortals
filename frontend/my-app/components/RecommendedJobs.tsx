@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Bookmark } from "lucide-react";
 import Link from "next/link";
-
+import { useResume } from "@/components/context/ResumeContext";
+import { resume } from "react-dom/server.node";
 // -----------------------------------------------------------------------------
 // JOB TYPE
 // -----------------------------------------------------------------------------
@@ -28,6 +29,12 @@ interface Job {
   company_name: string;
   logo: string;
   created_at: string;
+  has_applied: boolean;
+
+   // Resume based recommendation
+  match_score: number;
+  matched_skills: string[];
+  missing_skills: string[];
 }
 
 // -----------------------------------------------------------------------------
@@ -48,9 +55,13 @@ interface SavedJob {
 }
 
 interface SavedJobsListResponse {
-  success: boolean;
   count: number;
-  jobs: SavedJob[];
+  next: string | null;
+  previous: string | null;
+  results: {
+    success: boolean;
+    jobs: SavedJob[];
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -163,8 +174,8 @@ async function saveOrUnsaveJob(
   if (!response.ok) {
     throw new Error(
       data?.detail ||
-        data?.message ||
-        `Failed to ${action} job. Status: ${response.status}`
+      data?.message ||
+      `Failed to ${action} job. Status: ${response.status}`
     );
   }
 
@@ -241,9 +252,7 @@ function JobCardSkeleton() {
   );
 }
 
-// -----------------------------------------------------------------------------
-// COMPONENT
-// -----------------------------------------------------------------------------
+
 
 export default function RecommendedJobs({
   onReady,
@@ -251,7 +260,7 @@ export default function RecommendedJobs({
   onReady?: () => void;
 }) {
   const [jobs, setJobs] = useState<Job[]>([]);
-
+   const { resume } = useResume();
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState<string | null>(null);
@@ -278,7 +287,7 @@ export default function RecommendedJobs({
   // Invisible marker placed after the last rendered card. When it
   // enters the scroll container's viewport we reveal more cards.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-
+  
   // ---------------------------------------------------------------------------
   // LOAD JOBS + SAVED JOBS
   // ---------------------------------------------------------------------------
@@ -293,11 +302,14 @@ export default function RecommendedJobs({
 
         const token = getAccessToken();
 
-        // ---------------------------------------------------------------------
-        // FETCH ALL JOBS
-        // ---------------------------------------------------------------------
 
-        const jobsRequest = fetch(API_URL);
+        const jobsRequest = token
+          ? fetch(API_URL, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+          : fetch(API_URL);
 
         // ---------------------------------------------------------------------
         // FETCH SAVED JOBS
@@ -305,10 +317,10 @@ export default function RecommendedJobs({
 
         const savedJobsRequest = token
           ? fetch(SAVED_JOBS_URL, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            })
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
           : null;
 
         const [jobsResponse, savedResponse] =
@@ -335,25 +347,16 @@ export default function RecommendedJobs({
           );
         }
 
-        // ---------------------------------------------------------------------
-        // SAVED JOB RESPONSE
-        //
-        // Backend:
-        //
-        // {
-        //   success: true,
-        //   count: 3,
-        //   jobs: [
-        //     {
-        //       id: 32,
-        //       job_id: 1,
-        //       title: "React Developer",
-        //       ...
-        //     }
-        //   ]
-        // }
-        // ---------------------------------------------------------------------
+        // Normalize has_applied to a strict boolean, since the backend
+        // may send it as undefined/null/0/1 depending on serializer.
+        const normalizedJobs: Job[] = jobsData.map(
+          (job: any) => ({
+            ...job,
+            has_applied: Boolean(job?.has_applied),
+          })
+        );
 
+      
         let savedIds = new Set<number>();
 
         if (savedResponse && savedResponse.ok) {
@@ -361,18 +364,15 @@ export default function RecommendedJobs({
             await savedResponse.json();
 
           const savedJobsList = Array.isArray(
-            savedData?.jobs
+            savedData?.results?.jobs
           )
-            ? savedData.jobs
+            ? savedData.results.jobs
             : [];
 
           savedIds = new Set(
             savedJobsList
               .map((savedJob) => Number(savedJob.job_id))
-              .filter(
-                (id) =>
-                  !Number.isNaN(id)
-              )
+              .filter((id) => !Number.isNaN(id))
           );
         } else if (
           savedResponse &&
@@ -389,7 +389,7 @@ export default function RecommendedJobs({
 
         if (!cancelled) {
           // Newest jobs first.
-          setJobs(sortJobsDescending(jobsData));
+          setJobs(normalizedJobs);
           setSavedJobs(savedIds);
           setVisibleCount(PAGE_SIZE);
         }
@@ -416,7 +416,7 @@ export default function RecommendedJobs({
     return () => {
       cancelled = true;
     };
-  }, [onReady]);
+  }, [onReady , resume]);
 
   // ---------------------------------------------------------------------------
   // LOAD MORE ON SCROLL
@@ -678,6 +678,8 @@ export default function RecommendedJobs({
             const isPending =
               pendingJobs.has(job.id);
 
+            const hasApplied = job.has_applied === true;
+
             return (
               <div
                 key={job.id}
@@ -758,15 +760,13 @@ export default function RecommendedJobs({
                       border
                       transition-all
                       duration-200
-                      ${
-                        isPending
-                          ? "cursor-not-allowed opacity-50"
-                          : "cursor-pointer"
+                      ${isPending
+                        ? "cursor-not-allowed opacity-50"
+                        : "cursor-pointer"
                       }
-                      ${
-                        isSaved
-                          ? "border-blue-200 bg-blue-50"
-                          : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                      ${isSaved
+                        ? "border-blue-200 bg-blue-50"
+                        : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50"
                       }
                     `}
                   >
@@ -776,36 +776,54 @@ export default function RecommendedJobs({
                         w-5
                         transition-all
                         duration-200
-                        ${
-                          isSaved
-                            ? "fill-blue-600 text-blue-600"
-                            : "text-slate-400 hover:text-blue-600"
+                        ${isSaved
+                          ? "fill-blue-600 text-blue-600"
+                          : "text-slate-400 hover:text-blue-600"
                         }
                       `}
                     />
                   </button>
 
                   {/* -------------------------------------------------- */}
-                  {/* APPLY */}
+                  {/* APPLY / APPLIED */}
                   {/* -------------------------------------------------- */}
 
-                  <Button
-
-                    variant="outline"
-                    className="
-                      transition-all
-                      duration-200
-                      hover:border-blue-300
-                      hover:text-blue-300
-                      hover:shadow-[0_0_0_1px_rgba(147,197,253,0.35)]
-                    "
-                  >
-                    <Link
-                      href={`/main/Apply/${job.id}`}
+                  {hasApplied ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled
+                      title="You have already applied to this job"
+                      className="
+                        cursor-not-allowed
+                        border-slate-200
+                        bg-slate-100
+                        text-slate-400
+                        opacity-70
+                        hover:border-slate-200
+                        hover:bg-slate-100
+                        hover:text-slate-400
+                        hover:shadow-none
+                      "
                     >
-                      Apply Now
-                    </Link>
-                  </Button>
+                      Applied
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="
+                        transition-all
+                        duration-200
+                        hover:border-blue-300
+                        hover:text-blue-300
+                        hover:shadow-[0_0_0_1px_rgba(147,197,253,0.35)]
+                      "
+                    >
+                      <Link href={`/main/Apply/${job.id}`}>
+                        Apply Now
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </div>
             );

@@ -355,7 +355,7 @@ export default function Notification() {
   };
 
   return (
-    <div className="w-full max-w-8xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="w-full max-w-8xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -376,26 +376,31 @@ export default function Notification() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — scrollable on phone, scrollbar hidden but still scrollable */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-5">
-        <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
-          {TABS.map((tab) => (
-            <TabsTrigger
-              key={tab.key}
-              value={tab.key}
-              className="rounded-none border-b-2 border-transparent px-0 pb-3 text-sm font-medium text-slate-500 shadow-none transition-colors duration-200 hover:text-indigo-500 data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 data-[state=active]:shadow-none"
-            >
-              {tab.label}{" "}
-              <span className="ml-1 text-slate-400 data-[state=active]:text-indigo-500">
-                {counts[tab.key] || 0}
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TabsList className="h-auto w-max min-w-full justify-start gap-6 rounded-none border-b bg-transparent p-0">
+            {TABS.map((tab) => (
+              <TabsTrigger
+                key={tab.key}
+                value={tab.key}
+                className="shrink-0 whitespace-nowrap rounded-none border-b-2 border-transparent px-0 pb-3 text-sm font-medium text-slate-500 shadow-none transition-colors duration-200 hover:text-indigo-500 data-[state=active]:border-indigo-600 data-[state=active]:bg-transparent data-[state=active]:text-indigo-600 data-[state=active]:shadow-none"
+              >
+                {tab.label}{" "}
+                <span className="ml-1 text-slate-400 data-[state=active]:text-indigo-500">
+                  {counts[tab.key] || 0}
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
       </Tabs>
 
-      {/* List */}
-      <div className="mt-2 divide-y divide-slate-100">
+      {/* List — stacks into a column on phone (no forced horizontal scroll),
+          rows go back to a row layout from sm breakpoint up. Vertical
+          scroll on the whole list has its scrollbar hidden but still works
+          if you cap the height (see max-h note below). */}
+      <div className="mt-2 max-h-[70vh] divide-y divide-slate-100 overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {loading && (
           <p className="py-10 text-center text-sm text-slate-500">Loading notifications…</p>
         )}
@@ -412,20 +417,22 @@ export default function Notification() {
             return (
               <div
                 key={n.id}
-                className="-mx-3 flex items-start gap-3 rounded-lg px-3 py-4 transition-colors duration-150 first:pt-4 last:pb-0 hover:bg-slate-50"
+                className="-mx-3 flex flex-col gap-3 rounded-lg px-3 py-4 transition-colors duration-150 first:pt-4 last:pb-0 hover:bg-slate-50 sm:flex-row sm:items-start"
               >
-                <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${n.iconBg}`}
-                >
-                  <Icon className={`h-4 w-4 ${n.iconColor}`} />
-                </span>
+                <div className="flex flex-1 items-start gap-3">
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${n.iconBg}`}
+                  >
+                    <Icon className={`h-4 w-4 ${n.iconColor}`} />
+                  </span>
 
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-900">{n.title}</p>
-                  <p className="mt-0.5 text-sm text-slate-500">{n.description}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">{n.title}</p>
+                    <p className="mt-0.5 text-sm text-slate-500">{n.description}</p>
+                  </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2 pl-2">
+                <div className="flex shrink-0 items-center justify-between gap-2 pl-12 sm:justify-end sm:pl-2">
                   <span className="whitespace-nowrap text-xs text-slate-400">{n.timeAgo}</span>
                   {n.unread && (
                     <span className="h-2 w-2 rounded-full bg-blue-600" aria-label="Unread" />
@@ -451,7 +458,7 @@ export default function Notification() {
 
       {/* Pagination */}
       {!loading && filtered.length > 0 && (
-        <div className="mt-6 flex items-center justify-center gap-1.5">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}

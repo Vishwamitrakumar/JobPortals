@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState, useEffect, type KeyboardEvent } from "react";
 import {
     Bot,
     X,
@@ -39,6 +39,8 @@ export default function JobChatbot() {
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
+    const [token, setToken] = useState<string | null>(null);
+
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: 1,
@@ -49,8 +51,14 @@ export default function JobChatbot() {
     ]);
 
     // ==========================================================
-    // SEND MESSAGE
+    // Read localStorage ONLY on the client, after mount.
+    // This avoids "localStorage is not defined" during
+    // `next build` prerendering / SSR.
     // ==========================================================
+
+    useEffect(() => {
+        setToken(localStorage.getItem("access"));
+    }, []);
 
     const sendMessage = async (): Promise<void> => {
         const text = message.trim();
@@ -91,27 +99,26 @@ export default function JobChatbot() {
         setIsLoading(true);
 
         try {
-            // ------------------------------------------------------
-            // Django API
-            // ------------------------------------------------------
-
             const response = await fetch(`${API}/api/chatbot/`, {
                 method: "POST",
-
                 headers: {
                     "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
                 },
-
-                credentials: "include",
-
                 body: JSON.stringify({
                     message: text,
                 }),
             });
 
-            // ------------------------------------------------------
-            // Response
-            // ------------------------------------------------------
+            // Response JSON hai ya nahi, pehle check karo
+            const contentType = response.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+                const rawText = await response.text();
+                console.error("Non-JSON response from server:", rawText);
+                throw new Error(
+                    "Server error. Please check backend logs (500 error)."
+                );
+            }
 
             const data: {
                 success?: boolean;
@@ -124,10 +131,6 @@ export default function JobChatbot() {
                     data.message || "Unable to process your request."
                 );
             }
-
-            // ------------------------------------------------------
-            // AI message
-            // ------------------------------------------------------
 
             const assistantMessage: ChatMessage = {
                 id: Date.now() + 1,
@@ -225,8 +228,6 @@ export default function JobChatbot() {
                 >
                     {/* ==================================================
               HEADER
-              CHANGED: richer 3-stop gradient, subtle glow blob,
-              tighter alignment, "Online" dot now pulses.
           ================================================== */}
 
                     <div
@@ -323,8 +324,6 @@ export default function JobChatbot() {
 
                     {/* ==================================================
               MESSAGES
-              CHANGED: soft dotted bg pattern for texture,
-              slightly more breathing room between bubbles.
           ================================================== */}
 
                     <div
@@ -498,8 +497,6 @@ export default function JobChatbot() {
 
                     {/* ==================================================
               INPUT AREA
-              CHANGED: pill-shaped input, gradient send button
-              with lift-on-hover, tighter helper text.
           ================================================== */}
 
                     <div
@@ -600,9 +597,6 @@ export default function JobChatbot() {
 
             {/* ========================================================
           FLOATING CHAT BUTTON
-          CHANGED: added an animated pulse ring behind the button
-          so it draws the eye, richer gradient, larger tap target,
-          notification dot now has its own subtle pulse too.
       ======================================================== */}
 
             <div className="fixed bottom-4 right-4 z-[9998] sm:bottom-6 sm:right-6">

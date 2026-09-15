@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -173,16 +174,7 @@ function statusFromPercentage(percentage: number): string {
 
 const API = process.env.NEXT_PUBLIC_API;
 
-// The backend can return the profile in a few different shapes depending on
-// how the Django view is wired up:
-//  - a single profile object:      { id, full_name, ... }
-//  - a plain array:                [{ id, full_name, ... }, ...]
-//  - a DRF-paginated response:     { count, results: [{ ... }, ...] }
-// Previously the code only checked `typeof x === "object"`, which is also
-// true for arrays — so when the backend returned an array, every field read
-// like `currentProfile.full_name` came back undefined and the form stayed
-// blank even though the row existed in the DB. This normalizes all three
-// shapes down to a single profile object (or null).
+
 function extractProfileObject(parsed: unknown): Record<string, unknown> | null {
   if (!parsed || typeof parsed !== "object") {
     return null;
@@ -207,11 +199,7 @@ function extractProfileObject(parsed: unknown): Record<string, unknown> | null {
   return obj;
 }
 
-// ---- Step wizard configuration ----
-// Steps are derived at render time (not hardcoded) because the "Work
-// Experience" step only exists once Current Salary (an Additional
-// Information field) has a value — same conditional logic the form already
-// had, just expressed as a step instead of an inline card.
+
 type StepId = "personal" | "education" | "skills" | "additional" | "experience";
 
 interface StepDef {
@@ -222,6 +210,7 @@ interface StepDef {
 }
 
 export default function MyProfile() {
+   const router = useRouter();
   const [formData, setFormData] = useState<ProfileFormData>(initialFormData);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -230,18 +219,14 @@ export default function MyProfile() {
     defaultProfileStrength
   );
 
-  // Tracks whether a profile row already exists in the DB for this user.
-  // Populated after the initial GET. Used to decide PUT (update) vs
-  // POST (create) when saving.
+
   const [profileExists, setProfileExists] = useState(false);
 
   // Education section still stays collapsed until the user checks the box,
   // OR the fetched profile already has data in it.
   const [showEducation, setShowEducation] = useState(false);
 
-  // Add Work Experience is no longer an independent toggle — it shows
-  // automatically only while "Current Salary" (Additional Information) has
-  // a value, and hides again the moment that field is cleared.
+ 
   const showWorkExperience = Boolean(formData.currentSalary.trim());
 
   // ---- Step wizard state ----
@@ -1057,7 +1042,8 @@ export default function MyProfile() {
               Manage your personal information and account settings.
             </p>
           </div>
-          <Button variant="outline" className="w-fit gap-2">
+          <Button variant="outline" className="w-fit gap-2"  
+           onClick={() => router.push("/main/Viewprofile")} >
             <Eye className="h-4 w-4" />
             View Profile
           </Button>

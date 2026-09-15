@@ -45,7 +45,9 @@ from .view.savejob import (
     UnsaveJobAPIView,
     SavedJobListAPIView,
 )
-
+from .view.chatbot_view import (
+    ChatbotAPIView
+)
 
 # Notification Router
 router = DefaultRouter()
@@ -285,5 +287,10 @@ urlpatterns = [
         "reset-password/",
         ResetPasswordAPIView.as_view(),
         name="reset-password"
+    ),
+     path(
+        "chatbot/",
+        ChatbotAPIView.as_view(),
+        name="chatbot"
     ),
 ]

@@ -29,6 +29,12 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
 
+# Resume app se
+from resume.models import Resume
+from resume.services.job_recommender import (
+    parse_job_skills,
+    calculate_skill_match,
+)
 
 User = get_user_model()
 
@@ -515,23 +521,142 @@ class JobCreateAPIView(APIView):
         )
 
 class JobListAPIView(ListAPIView):
+
     queryset = Job.objects.all()
     serializer_class = JobSerializer
     permission_classes = [AllowAny]
 
+    def list(self, request, *args, **kwargs):
+
+        # =========================================
+        # 1. ALL JOBS
+        # =========================================
+
+        jobs = self.get_queryset()
+
+        # =========================================
+        # 2. CURRENT USER RESUME SKILLS
+        # =========================================
+
+        resume_skills = []
+
+        if request.user.is_authenticated:
+
+            try:
+
+                resume = Resume.objects.get(
+                    user=request.user
+                )
+
+                resume_skills = resume.skills or []
+
+            except Resume.DoesNotExist:
+
+                resume_skills = []
+
+        # =========================================
+        # 3. SERIALIZE ALL JOBS
+        # =========================================
+
+        serializer = self.get_serializer(
+            jobs,
+            many=True
+        )
+
+        jobs_data = serializer.data
+
+        # =========================================
+        # 4. CALCULATE MATCH
+        # =========================================
+
+        for job_data in jobs_data:
+
+            job_skills = parse_job_skills(
+                job_data.get("key_skills", "")
+            )
+
+            match_result = calculate_skill_match(
+                resume_skills,
+                job_skills
+            )
+
+            job_data["match_score"] = (
+                match_result["match_score"]
+            )
+
+            job_data["matched_skills"] = (
+                match_result["matched_skills"]
+            )
+
+            job_data["missing_skills"] = (
+                match_result["missing_skills"]
+            )
+
+        # =========================================
+        # 5. RANKING
+        # =========================================
+
+        jobs_data.sort(
+            key=lambda job: job["match_score"],
+            reverse=True
+        )
+
+        # =========================================
+        # 6. RESPONSE
+        # =========================================
+
+        return Response(
+            jobs_data,
+            status=status.HTTP_200_OK
+        )
+
 class JobDetailAPIView(RetrieveAPIView):
+
     queryset = Job.objects.all()
     serializer_class = JobSerializer
     permission_classes = [AllowAny]
+
+    def retrieve(self, request, *args, **kwargs):
+
+        # Get job
+        job = self.get_object()
+
+        # Serialize job data
+        serializer = self.get_serializer(job)
+
+        # Default
+        has_applied = False
+
+        # If user is logged in
+        if request.user.is_authenticated:
+
+            has_applied = ApplyForm.objects.filter(
+                user=request.user,
+                job=job
+            ).exists()
+
+        # Convert serializer data to dictionary
+        data = serializer.data
+
+        # Add application status
+        data["has_applied"] = has_applied
+
+        return Response(
+            data,
+            status=status.HTTP_200_OK
+        )
 
 class ApplyFormAPIView(APIView):
 
     parser_classes = (MultiPartParser, FormParser)
 
+    # Only logged-in users can apply
     def get_permissions(self):
-        if self.request.method == "POST":
-            return [AllowAny()]
         return [IsAuthenticated()]
+
+    # =========================================
+    # GET APPLICATIONS
+    # =========================================
 
     def get(self, request):
 
@@ -550,23 +675,61 @@ class ApplyFormAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
+    # =========================================
+    # POST APPLICATION
+    # =========================================
+
     def post(self, request):
 
-        serializer = ApplyFormSerializer(data=request.data)
+        # 1. Get job ID
+        job_id = request.data.get("job")
+
+        if not job_id:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Job is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Check duplicate application
+        already_applied = ApplyForm.objects.filter(
+            user=request.user,
+            job_id=job_id
+        ).exists()
+
+        if already_applied:
+            return Response(
+                {
+                    "success": False,
+                    "already_applied": True,
+                    "message": "You have already applied for this job."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Validate application data
+        serializer = ApplyFormSerializer(
+            data=request.data
+        )
 
         if serializer.is_valid():
 
-            # 1. Application save
-            application = serializer.save()
+            # 4. Save application with logged-in user
+            application = serializer.save(
+                user=request.user
+            )
 
-            # 2. Applied job
+            # 5. Applied job
             job = application.job
 
-            # 3. Job owner / recruiter
+            # 6. Job owner / recruiter
             recruiter = job.posted_by
 
-            # 4. Send notification to recruiter
+            # 7. Send notification to recruiter
             if recruiter:
+
                 Notification.objects.create(
                     recipient=recruiter,
                     notification_type="APPLICATION_SUBMITTED",
@@ -580,16 +743,22 @@ class ApplyFormAPIView(APIView):
                     is_read=False
                 )
 
+            # 8. Success response
             return Response(
                 {
                     "success": True,
+                    "already_applied": True,
                     "message": "Application Submitted Successfully"
                 },
                 status=status.HTTP_201_CREATED
             )
 
+        # 9. Validation errors
         return Response(
-            serializer.errors,
+            {
+                "success": False,
+                "errors": serializer.errors
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
 

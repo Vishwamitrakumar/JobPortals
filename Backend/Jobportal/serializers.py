@@ -37,9 +37,28 @@ class LoginSerializer(TokenObtainPairSerializer):
 
 
 class JobSerializer(serializers.ModelSerializer):
+
+    has_applied = serializers.SerializerMethodField()
+
     class Meta:
         model = Job
         fields = "__all__"
+        read_only_fields = ["has_applied"]
+
+    def get_has_applied(self, obj):
+
+        request = self.context.get("request")
+
+        if not request:
+            return False
+
+        if not request.user.is_authenticated:
+            return False
+
+        return ApplyForm.objects.filter(
+            user=request.user,
+            job=obj
+        ).exists()
 
 
 class JobSummarySerializer(serializers.ModelSerializer):
@@ -61,7 +80,7 @@ class ApplyFormSerializer(serializers.ModelSerializer):
     class Meta:
         model = ApplyForm
         fields = "__all__"
-
+        read_only_fields = ["user"]
 
 class ProfileSerializer(serializers.ModelSerializer):
 
