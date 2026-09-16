@@ -501,8 +501,7 @@ export default function DashboardHeader() {
           </h1>
 
           <p className="mt-1 text-sm text-slate-500 sm:mt-2 sm:text-lg">
-            Here's what's happening
-            with your job search today.
+           Explore opportunities and take the next step in your career.
           </p>
         </div>
 
@@ -512,38 +511,7 @@ export default function DashboardHeader() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
 
-          {/* =================================================
-              SEARCH
-          ================================================= */}
-
-          <div className="relative w-full sm:w-[430px]">
-
-            <Search
-              className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 sm:right-5 sm:h-5 sm:w-5"
-            />
-
-            <Input
-              placeholder="Search for jobs, companies..."
-              className="  h-11
-    rounded-2xl
-    border-slate-200
-    bg-slate-50
-    pl-4
-    pr-11
-    text-sm
-
-    focus-visible:border-blue-400
-    focus-visible:ring-1
-    focus-visible:ring-blue-300/50
-
-    sm:h-14
-    sm:pl-5
-    sm:pr-14
-    sm:text-base"
-            />
-
-          </div>
-
+         
           {/* =================================================
               NOTIFICATION + PROFILE ROW
               Kept together on mobile so they sit side by side
