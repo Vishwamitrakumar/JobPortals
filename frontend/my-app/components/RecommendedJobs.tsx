@@ -7,9 +7,7 @@ import { Bookmark } from "lucide-react";
 import Link from "next/link";
 import { useResume } from "@/components/context/ResumeContext";
 import { resume } from "react-dom/server.node";
-// -----------------------------------------------------------------------------
-// JOB TYPE
-// -----------------------------------------------------------------------------
+
 
 interface Job {
   id: number;
@@ -590,16 +588,11 @@ export default function RecommendedJobs({
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // JOBS CURRENTLY RENDERED (windowed slice of the full, sorted list)
-  // ---------------------------------------------------------------------------
 
   const visibleJobs = jobs.slice(0, visibleCount);
   const hasMore = visibleCount < jobs.length;
 
-  // ---------------------------------------------------------------------------
-  // RENDER
-  // ---------------------------------------------------------------------------
+
 
   return (
     <Card className="rounded-2xl p-4 sm:p-6">

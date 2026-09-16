@@ -17,6 +17,7 @@ import {
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useResume } from "@/components/context/ResumeContext";
 
 interface Job {
   id: number;
@@ -392,7 +393,7 @@ function JobCard({
 
 export default function Company() {
   const [jobs, setJobs] = useState<Job[]>([]);
-
+    const { resume } = useResume();
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState<string | null>(null);
@@ -496,7 +497,7 @@ export default function Company() {
 
   useEffect(() => {
     fetchJobs();
-  }, []);
+  }, [resume]);
 
   /* -------------------------------------------------------
      Save / Unsave Handlers
