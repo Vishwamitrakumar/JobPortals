@@ -1,16 +1,21 @@
 import os
 
-from openai import OpenAI
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
 
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
+load_dotenv()
+
+
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
 )
 
 
 CHAT_MODEL = os.getenv(
-    "OPENAI_CHAT_MODEL",
-    "gpt-4o-mini"
+    "GEMINI_CHAT_MODEL",
+    "gemini-3.8-flash"
 )
 
 
@@ -38,25 +43,19 @@ User Question:
 {question}
 """
 
-    response = client.chat.completions.create(
+    response = client.models.generate_content(
 
         model=CHAT_MODEL,
 
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful JobPortal "
-                    "career assistant."
-                )
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
+        contents=prompt,
 
-        temperature=0.2
+        config=types.GenerateContentConfig(
+            system_instruction=(
+                "You are a helpful JobPortal "
+                "career assistant."
+            ),
+            temperature=0.2
+        )
     )
 
-    return response.choices[0].message.content
+    return response.text

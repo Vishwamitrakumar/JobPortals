@@ -45,14 +45,13 @@ MEDIA_ROOT = BASE_DIR / "media"
 INSTALLED_APPS = [
     "Jobportal",
     "resume",
+    "cloudinary",
+    "cloudinary_storage",
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
-
     "corsheaders",
-
     "home",
-
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -249,3 +248,18 @@ FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
     "https://talvoro.vercel.app"
 )
+
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+    "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+    "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+}
+
+STORAGES = {
+    "default": {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
