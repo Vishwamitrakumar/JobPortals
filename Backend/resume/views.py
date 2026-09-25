@@ -8,7 +8,7 @@ from .serializers import ResumeSerializer
 
 from .services.pdf_reader import extract_pdf_text
 from .services.skill_extractor import extract_skills
-
+import cloudinary.uploader
 
 class ResumeAPIView(APIView):
 
@@ -117,11 +117,12 @@ class ResumeAPIView(APIView):
 
         # Save
         resume = Resume.objects.create(
-            user=request.user,
-            file=resume_file,
-            extracted_text=resume_text,
-            skills=skills
-        )
+        user=request.user,
+        file=resume_file,
+        original_name=resume_file.name,
+        extracted_text=resume_text,
+        skills=skills
+      )
 
         serializer = ResumeSerializer(resume)
 
@@ -210,6 +211,7 @@ class ResumeAPIView(APIView):
             )
 
             resume.file = resume_file
+            resume.original_name = resume_file.name
             resume.extracted_text = resume_text
             resume.skills = skills
 

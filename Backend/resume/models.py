@@ -1,16 +1,25 @@
 from django.db import models
 from django.conf import settings
+from cloudinary_storage.storage import RawMediaCloudinaryStorage
 
 
 class Resume(models.Model):
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="resume"
     )
 
-    file = models.FileField(upload_to="resumes/")
+    file = models.FileField(
+        upload_to="resumes/",
+        storage=RawMediaCloudinaryStorage()
+    )
 
+    original_name = models.CharField(
+    max_length=255,
+    blank=True
+    )
     extracted_text = models.TextField(blank=True)
 
     skills = models.JSONField(default=list)
