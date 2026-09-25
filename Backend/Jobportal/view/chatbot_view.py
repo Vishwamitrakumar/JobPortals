@@ -1,3 +1,5 @@
+from collections import Counter
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -104,7 +106,8 @@ class ChatbotAPIView(APIView):
         elif intent == "APPLICATION_STATUS":
 
             reply = self.handle_application_status(
-                user
+                user,
+                message
             )
 
         elif intent == "PROFILE":
@@ -125,6 +128,15 @@ class ChatbotAPIView(APIView):
 
             reply = answer_from_rag(
                 message
+            )
+
+        elif intent == "GENERAL":
+
+            reply = (
+                "Hi! 👋 I'm JobPortal AI. "
+                "I can help you with jobs, applications, "
+                "interviews, profiles, job status, "
+                "and career questions."
             )
 
         else:
@@ -213,7 +225,8 @@ Company: {job.company_name}
 
     def handle_application_status(
         self,
-        user
+        user,
+        message
     ):
 
         applications = get_user_applications(
@@ -223,26 +236,142 @@ Company: {job.company_name}
         if not applications:
 
             return (
-                "I couldn't find any applications "
-                "associated with your account."
+                "You have not submitted any "
+                "job applications yet."
             )
 
-        context = []
+        # ==========================================
+        # COUNT ALL STATUSES
+        # ==========================================
+
+        status_counter = Counter()
 
         for application in applications:
 
-            context.append(
+            status = getattr(
+                application,
+                "status",
+                None
+            )
+
+            if status:
+
+                status_counter[
+                    status.strip().lower()
+                ] += 1
+
+        # ==========================================
+        # SPECIFIC STATUS COUNTS
+        # ==========================================
+
+        shortlisted_count = (
+            status_counter.get(
+                "shortlisted",
+                0
+            )
+        )
+
+        interview_count = (
+            status_counter.get(
+                "interview",
+                0
+            )
+        )
+
+        rejected_count = (
+            status_counter.get(
+                "rejected",
+                0
+            )
+        )
+
+        pending_count = (
+            status_counter.get(
+                "pending",
+                0
+            )
+        )
+
+        # ==========================================
+        # BUILD APPLICATION DETAILS
+        # ==========================================
+
+        application_details = []
+
+        for application in applications:
+
+            job = getattr(
+                application,
+                "job",
+                None
+            )
+
+            if job:
+
+                job_title = getattr(
+                    job,
+                    "job_title",
+                    "Unknown Job"
+                )
+
+                company_name = getattr(
+                    job,
+                    "company_name",
+                    "Unknown Company"
+                )
+
+            else:
+
+                job_title = "Unknown Job"
+                company_name = "Unknown Company"
+
+            status = getattr(
+                application,
+                "status",
+                "Unknown"
+            )
+
+            application_details.append(
                 f"""
-Job: {application.job.job_title}
-Company: {application.job.company_name}
-Status: {application.status}
+Job: {job_title}
+Company: {company_name}
+Status: {status}
 """
             )
 
-        return generate_answer(
-            "Tell the user about their application status.",
-            "\n".join(context)
-        )
+        # ==========================================
+        # SUMMARY
+        # ==========================================
+
+        summary = f"""
+APPLICATION SUMMARY
+
+Total Applications:
+{len(applications)}
+
+Shortlisted:
+{shortlisted_count}
+
+Interview:
+{interview_count}
+
+Rejected:
+{rejected_count}
+
+Pending:
+{pending_count}
+
+
+APPLICATION DETAILS
+
+{"".join(application_details)}
+"""
+
+        # ==========================================
+        # RETURN DIRECTLY
+        # ==========================================
+
+        return summary
 
     # ==================================================
     # PROFILE
@@ -265,27 +394,95 @@ Status: {application.status}
                 "information."
             )
 
+        # getattr prevents AttributeError if
+        # a profile field is missing.
+
+        full_name = getattr(
+            profile,
+            "full_name",
+            ""
+        )
+
+        job_title = getattr(
+            profile,
+            "job_title",
+            ""
+        )
+
+        experience = getattr(
+            profile,
+            "experience",
+            ""
+        )
+
+        skills = getattr(
+            profile,
+            "skills",
+            ""
+        )
+
+        about = getattr(
+            profile,
+            "about",
+            ""
+        )
+
+        degree = getattr(
+            profile,
+            "degree",
+            ""
+        )
+
+        institution = getattr(
+            profile,
+            "institution",
+            ""
+        )
+
+        phone = getattr(
+            profile,
+            "phone",
+            ""
+        )
+
+        location = getattr(
+            profile,
+            "location",
+            ""
+        )
+
         context = f"""
+USER PROFILE
+
 Name:
-{profile.full_name}
+{full_name}
+
+Email:
+{getattr(profile, "email", user.email)}
+
+Phone:
+{phone}
+
+Location:
+{location}
 
 Job Title:
-{profile.job_title}
+{job_title}
 
 Experience:
-{profile.experience}
+{experience}
 
 Skills:
-{profile.skills}
+{skills}
 
 About:
-{profile.about}
+{about}
 
 Education:
-{profile.degree}
+{degree}
 
 Institution:
-{profile.institution}
+{institution}
 """
 
         return generate_answer(
@@ -327,16 +524,16 @@ Institution:
 USER PROFILE
 
 Job Title:
-{profile.job_title}
+{getattr(profile, "job_title", "")}
 
 Experience:
-{profile.experience}
+{getattr(profile, "experience", "")}
 
 Skills:
-{profile.skills}
+{getattr(profile, "skills", "")}
 
 ABOUT:
-{profile.about}
+{getattr(profile, "about", "")}
 
 
 AVAILABLE JOBS
