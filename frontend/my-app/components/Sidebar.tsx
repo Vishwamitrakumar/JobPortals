@@ -18,6 +18,7 @@ import {
   Upload,
   Menu,
   Bookmark,
+  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -150,6 +151,13 @@ function SidebarContent() {
   const [uploading, setUploading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+
+  // ------------------------------------------------
+  // LOGOUT STATE
+  // ------------------------------------------------
+
+  const [loggingOut, setLoggingOut] = useState(false);
 
 
   // ------------------------------------------------
@@ -291,6 +299,10 @@ function SidebarContent() {
   // ------------------------------------------------
 
   const handleLogout = async () => {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
     try {
       const access =
         localStorage.getItem("access");
@@ -326,6 +338,8 @@ function SidebarContent() {
 
       // Redirect login
       router.push("/login");
+
+      setLoggingOut(false);
     }
   };
 
@@ -459,12 +473,17 @@ function SidebarContent() {
       <button
         type="button"
         onClick={handleLogout}
-        className="mt-2 flex items-center gap-4 rounded-xl px-4 py-3 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
+        disabled={loggingOut}
+        className="mt-2 flex items-center gap-4 rounded-xl px-4 py-3 text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-70 disabled:cursor-not-allowed"
       >
 
-        <LogOut className="h-5 w-5" />
+        {loggingOut ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : (
+          <LogOut className="h-5 w-5" />
+        )}
 
-        Logout
+        {loggingOut ? "Logging out..." : "Logout"}
 
       </button>
 

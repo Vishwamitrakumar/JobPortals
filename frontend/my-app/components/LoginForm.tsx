@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,8 @@ export default function LoginForm({
     const [rememberMe, setRememberMe] = useState(true);
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
     const showLoginToast = (type: "success" | "error", title: string, message: string) => {
         toast.add({
@@ -37,6 +39,9 @@ export default function LoginForm({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (isLoading) return;
+        setIsLoading(true);
 
         try {
             const response = await fetch(`${API}/api/login/`, {
@@ -68,6 +73,8 @@ export default function LoginForm({
         } catch (error) {
             console.error(error);
             showLoginToast("error", "Error", "Server Error");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -75,6 +82,7 @@ export default function LoginForm({
     const googleLogin = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
             console.log("Google Login Success:", tokenResponse);
+            setIsGoogleLoading(true);
 
             try {
                 const response = await fetch(`${API}/api/google-login/`, {
@@ -124,6 +132,8 @@ export default function LoginForm({
                     "Error",
                     "Server Error"
                 );
+            } finally {
+                setIsGoogleLoading(false);
             }
         },
 
@@ -168,6 +178,7 @@ export default function LoginForm({
                                 placeholder="Enter your username"
                                 className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-[#2F6FE0]/40"
                                 required
+                                disabled={isLoading}
                             />
                         </div>
                     </div>
@@ -190,6 +201,7 @@ export default function LoginForm({
                                 placeholder="Enter your password"
                                 className="w-full pl-10 pr-10 py-3 rounded-lg border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2F6FE0]/40 focus:border-[#2F6FE0] transition"
                                 required
+                                disabled={isLoading}
                             />
                             <button
                                 type="button"
@@ -224,10 +236,20 @@ export default function LoginForm({
                     {/* Submit */}
                     <Button
                         type="submit"
-                        className="w-full flex items-center justify-center gap-2 bg-[#2F6FE0] hover:bg-[#265ec2] text-white font-semibold py-3 rounded-lg transition"
+                        disabled={isLoading || isGoogleLoading}
+                        className="w-full flex items-center justify-center gap-2 bg-[#2F6FE0] hover:bg-[#265ec2] text-white font-semibold py-3 rounded-lg transition disabled:opacity-70 disabled:cursor-not-allowed"
                     >
-                        <User className="w-4 h-4" />
-                        Login
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Logging in...
+                            </>
+                        ) : (
+                            <>
+                                <User className="w-4 h-4" />
+                                Login
+                            </>
+                        )}
                     </Button>
 
                     {/* Divider */}
@@ -242,10 +264,20 @@ export default function LoginForm({
                         type="button"
                         variant="outline"
                         onClick={() => googleLogin()}
-                        className="w-full flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-50 text-[#1A2333] font-semibold py-3 rounded-lg transition"
+                        disabled={isLoading || isGoogleLoading}
+                        className="w-full flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-50 text-[#1A2333] font-semibold py-3 rounded-lg transition disabled:opacity-70 disabled:cursor-not-allowed"
                     >
-                        <GoogleIcon />
-                        Login with Google
+                        {isGoogleLoading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Signing in...
+                            </>
+                        ) : (
+                            <>
+                                <GoogleIcon />
+                                Login with Google
+                            </>
+                        )}
                     </Button>
                 </form>
 
@@ -255,6 +287,7 @@ export default function LoginForm({
                         type="button"
                         onClick={() => setIsSignup(true)}
                         className="text-[#2F6FE0] font-medium hover:underline"
+                        disabled={isLoading || isGoogleLoading}
                     >
                         Register Now
                     </button>
